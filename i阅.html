@@ -1,0 +1,1798 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>i阅</title>
+  <style>
+    :root {
+      --warm: rgba(255, 240, 215, 0.88);
+      --muted: rgba(255, 240, 215, 0.42);
+      --faint: rgba(255, 240, 215, 0.18);
+      --panel: rgba(18, 14, 10, 0.78);
+      --line: rgba(255, 220, 170, 0.22);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      cursor: default;
+      color: var(--warm);
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 50% 46%, rgba(70, 38, 16, 0.22), transparent 48%),
+        #000;
+    }
+
+    #outer-halo,
+    #glow-core,
+    #listening-ripple {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      will-change: transform, opacity, filter;
+    }
+
+    #outer-halo {
+      width: 60vw;
+      height: 60vw;
+      max-width: 760px;
+      max-height: 760px;
+      min-width: 420px;
+      min-height: 420px;
+      background: radial-gradient(circle, rgba(200,140,80,0.05), rgba(140,80,40,0.006) 56%, transparent 72%);
+      filter: blur(12px);
+      animation: outerBreath 14s ease-in-out infinite;
+    }
+
+    #glow-core {
+      width: 38vw;
+      height: 38vw;
+      max-width: 510px;
+      max-height: 510px;
+      min-width: 260px;
+      min-height: 260px;
+      background: radial-gradient(circle, rgba(220,170,100,0.40), rgba(190,140,70,0.18) 34%, rgba(150,100,40,0.06) 58%, transparent 75%);
+      filter: blur(20px);
+      animation: coreBreath 10s ease-in-out infinite, emberShift 16s ease-in-out infinite;
+    }
+
+    #listening-ripple {
+      display: none;
+      width: 34vw;
+      height: 34vw;
+      border: 1px solid rgba(230, 170, 95, 0.18);
+      animation: ripple 2.4s ease-out infinite;
+    }
+
+    body.listening #outer-halo { animation-duration: 8s; }
+    body.listening #glow-core { animation-duration: 5s, 16s; }
+    body.listening #listening-ripple { display: block; }
+    body.speaking #outer-halo { animation-duration: 6s; }
+    body.speaking #glow-core { animation-duration: 3.5s, 16s; }
+
+    body.daylight {
+      --warm: rgba(255, 248, 232, 0.98);
+      --muted: rgba(255, 238, 205, 0.74);
+      --faint: rgba(255, 230, 185, 0.38);
+      --panel: rgba(24, 17, 10, 0.9);
+      --line: rgba(255, 226, 176, 0.5);
+    }
+
+    body.daylight #app {
+      background:
+        radial-gradient(circle at 50% 46%, rgba(116, 64, 24, 0.38), transparent 54%),
+        #000;
+    }
+
+    body.daylight #outer-halo {
+      background: radial-gradient(circle, rgba(236,174,96,0.16), rgba(186,112,46,0.035) 58%, transparent 76%);
+      filter: blur(8px);
+    }
+
+    body.daylight #glow-core {
+      background: radial-gradient(circle, rgba(255,205,126,0.66), rgba(230,162,82,0.30) 36%, rgba(190,112,42,0.11) 62%, transparent 78%);
+      filter: blur(16px);
+    }
+
+    @keyframes outerBreath {
+      0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.96); }
+      50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.04); }
+    }
+
+    @keyframes coreBreath {
+      0%, 100% { opacity: 0.25; transform: translate(-50%, -50%) scale(0.93); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+    }
+
+    @keyframes emberShift {
+      0%, 100% { filter: blur(20px) hue-rotate(-3deg); }
+      50% { filter: blur(23px) hue-rotate(3deg); }
+    }
+
+    @keyframes ripple {
+      from { opacity: 0.55; transform: translate(-50%, -50%) scale(0.78); }
+      to { opacity: 0; transform: translate(-50%, -50%) scale(1.75); }
+    }
+
+    #boot {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      transition: opacity .9s ease, visibility .9s ease;
+      z-index: 20;
+    }
+
+    #boot.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .boot-card {
+      width: min(440px, calc(100vw - 48px));
+      text-align: center;
+    }
+
+    .brand {
+      margin-bottom: 52px;
+      letter-spacing: .28em;
+      text-indent: .28em;
+      font-size: 34px;
+      font-weight: 200;
+      color: rgba(255, 238, 205, 0.86);
+      text-shadow: 0 0 32px rgba(220, 150, 70, 0.34);
+    }
+
+    .boot-input,
+    .inline-input,
+    .panel input,
+    .panel select,
+    .panel textarea {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 6px;
+      color: rgba(255, 242, 222, 0.95);
+      caret-color: rgba(255, 220, 170, 0.9);
+      font-weight: 300;
+    }
+
+    .boot-input {
+      text-align: center;
+      font-size: 22px;
+    }
+
+    .hint {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 300;
+    }
+
+    #onboarding {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.64);
+      backdrop-filter: blur(12px);
+    }
+
+    #onboarding.active { display: grid; }
+
+    .onboarding-card {
+      width: min(460px, calc(100vw - 48px));
+      text-align: center;
+    }
+
+    .onboarding-card h1 {
+      margin: 0 0 28px;
+      font-weight: 250;
+      font-size: 26px;
+    }
+
+    #subtitle {
+      position: absolute;
+      left: 10%;
+      top: 50%;
+      width: min(560px, 44vw);
+      transform: translateY(-50%);
+      font-size: clamp(18px, 1.65vw, 24px);
+      line-height: 1.85;
+      font-weight: 300;
+      white-space: pre-wrap;
+      color: rgba(255,240,215,0.88);
+      text-shadow: 0 0 22px rgba(210, 130, 60, 0.28);
+      opacity: 0;
+      transition: opacity .35s ease;
+      z-index: 5;
+    }
+
+    #subtitle.visible { opacity: 1; }
+
+    body.daylight #subtitle {
+      width: min(680px, 52vw);
+      padding: 18px 22px;
+      border-left: 1px solid rgba(255, 225, 176, 0.28);
+      border-radius: 18px;
+      background: linear-gradient(90deg, rgba(0,0,0,0.54), rgba(0,0,0,0.18), transparent);
+      color: rgba(255, 250, 238, 0.98);
+      font-size: clamp(21px, 1.9vw, 29px);
+      font-weight: 360;
+      text-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.86),
+        0 0 28px rgba(255, 174, 84, 0.42);
+    }
+
+    #center-status {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 30px;
+      letter-spacing: .18em;
+      color: rgba(255, 232, 200, 0.78);
+      opacity: 0;
+      transition: opacity .25s ease;
+      z-index: 6;
+    }
+
+    #center-status.visible { opacity: 1; }
+
+    #input-dock {
+      position: absolute;
+      left: 9%;
+      bottom: 7.5%;
+      width: 300px;
+      z-index: 12;
+    }
+
+    #input-line {
+      width: 84px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255,220,170,.58), transparent);
+      box-shadow: 0 0 18px rgba(220, 150, 70, 0.32);
+      transition: width .25s ease, opacity .25s ease;
+      opacity: .72;
+    }
+
+    #input-dock.open #input-line { width: 300px; opacity: .25; }
+
+    body.daylight #input-line {
+      height: 2px;
+      width: 116px;
+      background: linear-gradient(90deg, rgba(255,236,198,.95), rgba(255,180,94,.36), transparent);
+      box-shadow: 0 0 26px rgba(255, 176, 82, 0.65);
+      opacity: .95;
+    }
+
+    #text-form {
+      display: none;
+      margin-top: 10px;
+    }
+
+    #input-dock.open #text-form { display: block; }
+
+    .inline-input {
+      font-size: 17px;
+      background: rgba(0, 0, 0, 0.22);
+    }
+
+    body.daylight .inline-input,
+    body.daylight .boot-input,
+    body.daylight .panel input,
+    body.daylight .panel select,
+    body.daylight .panel textarea {
+      border-bottom-color: rgba(255, 232, 186, 0.58);
+      color: rgba(255, 250, 238, 0.98);
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.72);
+    }
+
+    body.daylight .inline-input {
+      background: rgba(0, 0, 0, 0.48);
+      border-radius: 12px 12px 0 0;
+      padding-left: 12px;
+      padding-right: 12px;
+      font-size: 19px;
+    }
+
+    #bottom-hint {
+      position: absolute;
+      left: 50%;
+      bottom: 7%;
+      transform: translateX(-50%);
+      color: rgba(255, 238, 215, 0.35);
+      font-size: 13px;
+      font-weight: 300;
+      z-index: 5;
+    }
+
+    body.daylight #bottom-hint {
+      color: rgba(255, 242, 218, 0.72);
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.8);
+      font-size: 14px;
+    }
+
+    .corner {
+      position: absolute;
+      z-index: 16;
+      border: 0;
+      background: transparent;
+      opacity: .2;
+      color: var(--warm);
+      cursor: default;
+      transition: opacity .2s ease;
+    }
+
+    .corner:hover { opacity: .55; }
+
+    body.daylight .corner {
+      opacity: .52;
+      text-shadow: 0 0 14px rgba(255, 187, 96, 0.5);
+    }
+
+    body.daylight .corner:hover { opacity: .86; }
+
+    #settings-button {
+      right: 26px;
+      bottom: 24px;
+      font-size: 20px;
+    }
+
+    #memory-button {
+      right: 68px;
+      bottom: 24px;
+      font-size: 19px;
+    }
+
+    #text-mode {
+      position: absolute;
+      right: 28px;
+      top: 26px;
+      color: rgba(255, 235, 205, 0.35);
+      font-size: 13px;
+      display: none;
+      z-index: 10;
+    }
+
+    #text-mode.visible { display: block; }
+
+    body.daylight #text-mode {
+      color: rgba(255, 240, 214, 0.72);
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.82);
+    }
+
+    #toast {
+      position: absolute;
+      left: 50%;
+      top: 28px;
+      transform: translateX(-50%) translateY(-8px);
+      padding: 10px 18px;
+      border: 1px solid rgba(255, 220, 170, 0.12);
+      border-radius: 999px;
+      background: rgba(20, 14, 8, 0.68);
+      color: rgba(255, 238, 210, 0.8);
+      opacity: 0;
+      transition: opacity .25s ease, transform .25s ease;
+      z-index: 50;
+      font-size: 13px;
+    }
+
+    #toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .modal {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      z-index: 40;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(10px);
+    }
+
+    .modal.active { display: grid; }
+
+    .panel {
+      width: min(620px, calc(100vw - 56px));
+      max-height: calc(100vh - 80px);
+      overflow: auto;
+      padding: 28px;
+      border: 1px solid rgba(255, 220, 170, 0.13);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 24px 80px rgba(0,0,0,.55);
+    }
+
+    .panel h2 {
+      margin: 0 0 18px;
+      font-size: 20px;
+      font-weight: 300;
+    }
+
+    .panel label {
+      display: block;
+      margin-top: 17px;
+      color: rgba(255, 238, 215, 0.56);
+      font-size: 13px;
+    }
+
+    .panel textarea {
+      min-height: 84px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .soft-button {
+      border: 1px solid rgba(255, 220, 170, 0.18);
+      border-radius: 999px;
+      background: rgba(255, 220, 170, 0.05);
+      padding: 9px 15px;
+      color: rgba(255, 238, 215, 0.78);
+      cursor: default;
+    }
+
+    .soft-button:hover { background: rgba(255, 220, 170, 0.1); }
+
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255, 238, 215, 0.7);
+      font-size: 14px;
+    }
+
+    .switch input { width: auto; }
+
+    .memory-item {
+      padding: 14px 0;
+      border-top: 1px solid rgba(255, 220, 170, 0.09);
+      color: rgba(255, 238, 215, 0.68);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .memory-item strong {
+      color: rgba(255, 238, 215, 0.88);
+      font-weight: 400;
+    }
+
+    #mode-badge {
+      position: absolute;
+      left: 28px;
+      top: 26px;
+      z-index: 10;
+      color: rgba(255, 235, 205, 0.48);
+      font-size: 13px;
+      letter-spacing: .08em;
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
+    }
+
+    #reading-board,
+    #thought-map {
+      position: absolute;
+      display: none;
+      z-index: 8;
+      pointer-events: none;
+    }
+
+    #reading-board {
+      right: 7%;
+      top: 14%;
+      width: min(420px, 34vw);
+      max-height: 70vh;
+      overflow: hidden;
+      padding: 24px;
+      border: 1px solid rgba(255, 226, 186, 0.2);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(21, 16, 10, 0.76), rgba(0, 0, 0, 0.28));
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
+      backdrop-filter: blur(8px);
+    }
+
+    .board-title,
+    .map-title {
+      margin-bottom: 16px;
+      color: rgba(255, 240, 215, 0.72);
+      font-size: 13px;
+      letter-spacing: .16em;
+    }
+
+    .note-card {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-left: 1px solid rgba(255, 217, 164, 0.34);
+      border-radius: 12px;
+      background: rgba(255, 230, 180, 0.055);
+      color: rgba(255, 245, 226, 0.78);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .note-card small {
+      display: block;
+      margin-bottom: 4px;
+      color: rgba(255, 220, 176, 0.45);
+      font-size: 11px;
+      letter-spacing: .12em;
+    }
+
+    #thought-map {
+      inset: 0;
+    }
+
+    .map-title {
+      position: absolute;
+      right: 7%;
+      top: 12%;
+    }
+
+    .thought-node {
+      position: absolute;
+      min-width: 86px;
+      max-width: 170px;
+      padding: 9px 12px;
+      border: 1px solid rgba(190, 220, 255, 0.18);
+      border-radius: 999px;
+      background: rgba(14, 24, 44, 0.34);
+      color: rgba(226, 240, 255, 0.8);
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.35;
+      box-shadow: 0 0 26px rgba(91, 155, 255, 0.14);
+      backdrop-filter: blur(6px);
+    }
+
+    body.mode-desk {
+      --warm: rgba(255, 250, 238, 0.98);
+      --muted: rgba(255, 240, 214, 0.78);
+      --panel: rgba(26, 20, 13, 0.92);
+    }
+
+    body.mode-desk #app {
+      background:
+        linear-gradient(90deg, rgba(0,0,0,0.88), rgba(20,13,6,0.72), rgba(0,0,0,0.92)),
+        radial-gradient(circle at 32% 44%, rgba(180, 112, 48, 0.34), transparent 46%),
+        #000;
+    }
+
+    body.mode-desk #subtitle {
+      left: 7%;
+      width: min(520px, 40vw);
+    }
+
+    body.mode-desk #reading-board {
+      display: block;
+    }
+
+    body.mode-desk #glow-core {
+      left: 32%;
+      background: radial-gradient(circle, rgba(255,218,146,0.56), rgba(220,145,70,0.20) 38%, transparent 74%);
+    }
+
+    body.mode-starmap #app {
+      background:
+        radial-gradient(circle at 52% 48%, rgba(42, 80, 150, 0.26), transparent 38%),
+        radial-gradient(circle at 72% 22%, rgba(140, 104, 220, 0.12), transparent 30%),
+        #000;
+    }
+
+    body.mode-starmap #outer-halo {
+      background: radial-gradient(circle, rgba(98, 145, 255,0.13), rgba(80,60,180,0.018) 58%, transparent 76%);
+    }
+
+    body.mode-starmap #glow-core {
+      background: radial-gradient(circle, rgba(170,205,255,0.44), rgba(84,126,220,0.18) 34%, rgba(74,40,140,0.07) 60%, transparent 76%);
+    }
+
+    body.mode-starmap #thought-map {
+      display: block;
+    }
+
+    body.mode-starmap #subtitle {
+      left: 7%;
+      width: min(500px, 38vw);
+    }
+
+    @media (max-width: 760px) {
+      #subtitle {
+        left: 7%;
+        width: 86vw;
+      }
+
+      #input-dock {
+        left: 7%;
+        width: 86vw;
+      }
+
+      #input-dock.open #input-line { width: 100%; }
+
+      body.mode-desk #reading-board,
+      body.mode-starmap #thought-map {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <div id="outer-halo"></div>
+    <div id="glow-core"></div>
+    <div id="listening-ripple"></div>
+
+    <section id="boot">
+      <div class="boot-card">
+        <div class="brand">i阅</div>
+        <input id="book-input" class="boot-input" autocomplete="off" placeholder="今晚读哪本书？">
+        <div class="hint">输入书名后按 Enter</div>
+      </div>
+    </section>
+
+    <section id="onboarding">
+      <div class="onboarding-card">
+        <h1 id="onboarding-title">我该怎么称呼你？</h1>
+        <input id="onboarding-input" class="boot-input" autocomplete="off">
+        <div class="hint">Enter 继续，直接 Enter 可跳过</div>
+      </div>
+    </section>
+
+    <div id="subtitle"></div>
+    <div id="center-status">...</div>
+    <div id="bottom-hint">按空格键输入 · 可用微信语音</div>
+    <div id="mode-badge"></div>
+    <div id="text-mode">文字模式</div>
+
+    <section id="reading-board">
+      <div class="board-title">READING NOTES</div>
+      <div id="reading-board-content"></div>
+    </section>
+
+    <section id="thought-map">
+      <div class="map-title">THOUGHT MAP</div>
+      <div id="thought-map-content"></div>
+    </section>
+
+    <section id="input-dock">
+      <div id="input-line"></div>
+      <form id="text-form">
+        <input id="text-input" class="inline-input" autocomplete="off" placeholder="想跟 i阅 说什么？">
+      </form>
+    </section>
+
+    <button id="memory-button" class="corner" title="记忆">◇</button>
+    <button id="settings-button" class="corner" title="设置">⚙</button>
+    <div id="toast"></div>
+
+    <section id="settings-modal" class="modal">
+      <div class="panel">
+        <h2>设置</h2>
+        <label>DeepSeek API Key</label>
+        <input id="deepseek-key" placeholder="sk-...">
+        <label>TTS 提供商</label>
+        <select id="tts-provider">
+          <option value="xiaomi">小米 MiMo V2.5 TTS（限时免费）</option>
+          <option value="minimax">MiniMax TTS（备用）</option>
+        </select>
+        <label>小米 MiMo API Key</label>
+        <input id="mimo-key" placeholder="sk-...">
+        <label>小米 MiMo 音色</label>
+        <select id="mimo-voice">
+          <option value="白桦">白桦（男声）</option>
+          <option value="苏打">苏打（男声）</option>
+          <option value="冰糖">冰糖（女声）</option>
+          <option value="茉莉">茉莉（女声）</option>
+          <option value="mimo_default">MiMo 默认</option>
+        </select>
+        <label>小米 MiMo 语音模式</label>
+        <select id="mimo-mode">
+          <option value="preset">预置音色</option>
+          <option value="voiceDesign">自定义音色描述</option>
+          <option value="voiceClone">音频样本复刻</option>
+        </select>
+        <label>朗读风格</label>
+        <select id="mimo-style">
+          <option value="reading_friend">读书朋友：自然、松弛、不端着</option>
+          <option value="old_master">老先生：慢一点、温和、带阅历感</option>
+          <option value="night_radio">午夜电台：低声、贴近、陪伴感</option>
+          <option value="coach">阅读教练：轻快、鼓励、推进感</option>
+          <option value="custom">自定义</option>
+        </select>
+        <label>自定义朗读风格</label>
+        <textarea id="mimo-custom-style" placeholder="例如：像一个熟悉的朋友在旁边聊书，语气自然，不播音腔，不要太正式。"></textarea>
+        <label>自定义音色描述（选择“自定义音色描述”时生效）</label>
+        <textarea id="mimo-voice-design" placeholder="例如：一位五十多岁的中文男声，嗓音温和略沙哑，像读过很多书的长者，说话松弛、克制、有一点幽默感。"></textarea>
+        <label>MiniMax API Key</label>
+        <input id="minimax-key" placeholder="MiniMax API Key">
+        <label>MiniMax Group ID（如账号需要）</label>
+        <input id="minimax-group" placeholder="可留空">
+        <label>Tavily API Key</label>
+        <input id="tavily-key" placeholder="tvly-...">
+        <div class="row">
+          <label class="switch"><input id="tts-enabled" type="checkbox"> 语音合成（消耗额度）</label>
+          <label class="switch"><input id="subtitles-enabled" type="checkbox"> 默认字幕</label>
+          <label class="switch"><input id="daylight-mode" type="checkbox"> 白天可读模式</label>
+        </div>
+        <div class="actions">
+          <button class="soft-button" id="close-settings" type="button">关闭</button>
+          <button class="soft-button" id="save-settings" type="button">保存</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="memory-modal" class="modal">
+      <div class="panel">
+        <h2>记忆</h2>
+        <div id="memory-content"></div>
+        <div class="actions">
+          <button class="soft-button" id="export-memory" type="button">导出</button>
+          <button class="soft-button" id="clear-memory" type="button">清空</button>
+          <button class="soft-button" id="close-memory" type="button">关闭</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "iyue_memory_v1";
+    const SETTINGS_KEY = "iyue_settings_v1";
+    const MODE_KEY = "iyue_mode_v1";
+    const MODES = {
+      fireplace: {
+        name: "炉边智者",
+        badge: "炉边智者",
+        placeholder: "今晚读哪本书？",
+        hint: "按空格键输入 · 适合慢慢聊",
+        prompt: "当前模式：炉边智者。你更像一个坐在炉边的长者，安静、短句、有温度。优先回应情绪和本质，不急于整理。"
+      },
+      desk: {
+        name: "书桌笔记",
+        badge: "书桌笔记",
+        placeholder: "今天摊开哪本书？",
+        hint: "按空格键输入 · 右侧会沉淀笔记",
+        prompt: "当前模式：书桌笔记。除了陪读，也要帮读者沉淀章节、问题、金句和洞察。回复仍然简短，但更适合白天整理思考。"
+      },
+      starmap: {
+        name: "思维星图",
+        badge: "思维星图",
+        placeholder: "今天从哪本书开始连线？",
+        hint: "按空格键输入 · 对话会变成思想节点",
+        prompt: "当前模式：思维星图。你要帮助读者发现概念之间的连接，尤其是跨书、跨经验、跨学科的关联。回复要像点亮一个思想节点。"
+      }
+    };
+    const SEARCH_TRIGGERS = ["第", "章", "作者", "出版", "年份", "事实", "资料", "介绍", "讲了什么", "背景", "搜索", "查一下", "书评", "评价", "谁是", "是什么"];
+    const LIGHT_QUESTIONS = {
+      fireplace: [
+        "读到这儿，有什么地方轻轻碰了你一下吗？",
+        "这几页里，你觉得作者真正想让人看见的是什么？",
+        "如果把这段话放回你的生活里，它会指向哪件事？"
+      ],
+      desk: [
+        "这里要不要记成一个问题，留给后面回答？",
+        "这一段里，哪个词最值得画线？",
+        "如果只留一句今天的读书笔记，会是哪一句？"
+      ],
+      starmap: [
+        "这个想法，和你以前读过的哪本书有点相似？",
+        "这里背后真正的概念是什么？",
+        "如果给这段内容起一个思想节点名，会叫什么？"
+      ]
+    };
+
+    function resolveMode() {
+      const params = new URLSearchParams(location.search);
+      const mode = params.get("mode") || localStorage.getItem(MODE_KEY) || "fireplace";
+      return MODES[mode] ? mode : "fireplace";
+    }
+
+    const state = {
+      mode: resolveMode(),
+      book: "",
+      messages: [],
+      idleTimer: null,
+      lightAskCount: 0,
+      toastTimer: null,
+      currentAudio: null,
+      recognition: null,
+      onboardingStep: 0,
+      onboardingDraft: { name: "", work: "", preferences: "" }
+    };
+
+    const els = {
+      body: document.body,
+      boot: document.getElementById("boot"),
+      bookInput: document.getElementById("book-input"),
+      onboarding: document.getElementById("onboarding"),
+      onboardingTitle: document.getElementById("onboarding-title"),
+      onboardingInput: document.getElementById("onboarding-input"),
+      subtitle: document.getElementById("subtitle"),
+      centerStatus: document.getElementById("center-status"),
+      inputDock: document.getElementById("input-dock"),
+      textForm: document.getElementById("text-form"),
+      textInput: document.getElementById("text-input"),
+      settingsButton: document.getElementById("settings-button"),
+      memoryButton: document.getElementById("memory-button"),
+      settingsModal: document.getElementById("settings-modal"),
+      memoryModal: document.getElementById("memory-modal"),
+      toast: document.getElementById("toast"),
+      textMode: document.getElementById("text-mode"),
+      modeBadge: document.getElementById("mode-badge"),
+      bottomHint: document.getElementById("bottom-hint"),
+      readingBoardContent: document.getElementById("reading-board-content"),
+      thoughtMapContent: document.getElementById("thought-map-content"),
+      deepseekKey: document.getElementById("deepseek-key"),
+      ttsProvider: document.getElementById("tts-provider"),
+      mimoKey: document.getElementById("mimo-key"),
+      mimoVoice: document.getElementById("mimo-voice"),
+      mimoMode: document.getElementById("mimo-mode"),
+      mimoStyle: document.getElementById("mimo-style"),
+      mimoCustomStyle: document.getElementById("mimo-custom-style"),
+      mimoVoiceDesign: document.getElementById("mimo-voice-design"),
+      minimaxKey: document.getElementById("minimax-key"),
+      minimaxGroup: document.getElementById("minimax-group"),
+      tavilyKey: document.getElementById("tavily-key"),
+      ttsEnabled: document.getElementById("tts-enabled"),
+      subtitlesEnabled: document.getElementById("subtitles-enabled"),
+      daylightMode: document.getElementById("daylight-mode"),
+      saveSettings: document.getElementById("save-settings"),
+      closeSettings: document.getElementById("close-settings"),
+      closeMemory: document.getElementById("close-memory"),
+      clearMemory: document.getElementById("clear-memory"),
+      exportMemory: document.getElementById("export-memory"),
+      memoryContent: document.getElementById("memory-content")
+    };
+
+    function defaultMemory() {
+      return {
+        conversations: [],
+        reader_profile: {
+          name: "",
+          work: "",
+          preferences: [],
+          reading_history: [],
+          currentChapter: "",
+          insights: [],
+          personality_notes: "",
+          initialized: false
+        },
+        dream_notes: [],
+        reading_notes: [],
+        thought_nodes: [],
+        last_consolidation: 0
+      };
+    }
+
+    function loadMemory() {
+      try {
+        return { ...defaultMemory(), ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) };
+      } catch {
+        return defaultMemory();
+      }
+    }
+
+    function saveMemory(memory) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
+    }
+
+    function pauseTtsForQuota() {
+      if (localStorage.getItem("iyue_tts_quota_pause_v1")) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...saved, ttsEnabled: false }));
+        localStorage.setItem("iyue_tts_quota_pause_v1", "1");
+      } catch {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ttsEnabled: false }));
+        localStorage.setItem("iyue_tts_quota_pause_v1", "1");
+      }
+    }
+
+    function activateLocalVoiceClone() {
+      if (localStorage.getItem("iyue_local_voice_clone_v1")) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+          ...saved,
+          ttsProvider: "xiaomi",
+          mimoMode: "voiceClone",
+          mimoStyle: saved.mimoStyle || "reading_friend",
+          ttsEnabled: true
+        }));
+        localStorage.setItem("iyue_local_voice_clone_v1", "1");
+      } catch {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+          ttsProvider: "xiaomi",
+          mimoMode: "voiceClone",
+          mimoStyle: "reading_friend",
+          ttsEnabled: true
+        }));
+        localStorage.setItem("iyue_local_voice_clone_v1", "1");
+      }
+    }
+
+    function loadSettings() {
+      const defaults = {
+        deepseekKey: "",
+        ttsProvider: "xiaomi",
+        mimoKey: "",
+        mimoVoice: "白桦",
+        mimoMode: "voiceClone",
+        mimoStyle: "reading_friend",
+        mimoCustomStyle: "",
+        mimoVoiceDesign: "一位五十多岁的中文男声，嗓音温和略沙哑，像读过很多书的长者，说话松弛、克制、有一点幽默感。",
+        minimaxKey: "",
+        minimaxGroup: "",
+        tavilyKey: "",
+        ttsEnabled: true,
+        subtitlesEnabled: false,
+        daylightMode: true
+      };
+      try {
+        return {
+          ...defaults,
+          ...(JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {})
+        };
+      } catch {
+        return defaults;
+      }
+    }
+
+    function saveSettings(settings) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      renderSettings();
+    }
+
+    function settingsFromForm() {
+      return {
+        deepseekKey: els.deepseekKey.value.trim(),
+        ttsProvider: els.ttsProvider.value,
+        mimoKey: els.mimoKey.value.trim(),
+        mimoVoice: els.mimoVoice.value,
+        mimoMode: els.mimoMode.value,
+        mimoStyle: els.mimoStyle.value,
+        mimoCustomStyle: els.mimoCustomStyle.value.trim(),
+        mimoVoiceDesign: els.mimoVoiceDesign.value.trim(),
+        minimaxKey: els.minimaxKey.value.trim(),
+        minimaxGroup: els.minimaxGroup.value.trim(),
+        tavilyKey: els.tavilyKey.value.trim(),
+        ttsEnabled: els.ttsEnabled.checked,
+        subtitlesEnabled: els.subtitlesEnabled.checked,
+        daylightMode: els.daylightMode.checked
+      };
+    }
+
+    function renderSettings() {
+      const settings = loadSettings();
+      els.deepseekKey.value = settings.deepseekKey;
+      els.ttsProvider.value = settings.ttsProvider || "xiaomi";
+      els.mimoKey.value = settings.mimoKey || "";
+      els.mimoVoice.value = settings.mimoVoice || "白桦";
+      els.mimoMode.value = settings.mimoMode || "preset";
+      els.mimoStyle.value = settings.mimoStyle || "reading_friend";
+      els.mimoCustomStyle.value = settings.mimoCustomStyle || "";
+      els.mimoVoiceDesign.value = settings.mimoVoiceDesign || "";
+      els.minimaxKey.value = settings.minimaxKey;
+      els.minimaxGroup.value = settings.minimaxGroup;
+      els.tavilyKey.value = settings.tavilyKey;
+      els.ttsEnabled.checked = Boolean(settings.ttsEnabled);
+      els.subtitlesEnabled.checked = Boolean(settings.subtitlesEnabled);
+      els.daylightMode.checked = Boolean(settings.daylightMode);
+      els.body.classList.toggle("daylight", Boolean(settings.daylightMode));
+      els.textMode.textContent = settings.ttsEnabled ? "" : "文字模式 · 语音已暂停";
+      els.textMode.classList.toggle("visible", !settings.ttsEnabled);
+    }
+
+    function renderMode() {
+      const mode = MODES[state.mode];
+      localStorage.setItem(MODE_KEY, state.mode);
+      document.title = `i阅 · ${mode.name}`;
+      Object.keys(MODES).forEach(key => els.body.classList.remove(`mode-${key}`));
+      els.body.classList.add(`mode-${state.mode}`);
+      els.bookInput.placeholder = mode.placeholder;
+      els.bottomHint.textContent = mode.hint;
+      els.modeBadge.textContent = mode.badge;
+      renderCompanionPanels();
+    }
+
+    function compactText(text, max = 42) {
+      const clean = String(text || "").replace(/\s+/g, " ").trim();
+      return clean.length > max ? `${clean.slice(0, max)}...` : clean;
+    }
+
+    function classifyNote(message) {
+      const text = message.content || "";
+      if (/第\s*[一二三四五六七八九十百千万\d]+\s*章/.test(text)) return "章节";
+      if (/[？?]|为什么|如何|怎么|是不是/.test(text)) return "问题";
+      if (text.length > 40) return "金句";
+      return message.role === "assistant" ? "洞察" : "感受";
+    }
+
+    function renderCompanionPanels() {
+      if (!els.readingBoardContent || !els.thoughtMapContent) return;
+      const memory = loadMemory();
+      const recent = [...state.messages, ...memory.conversations.slice(-4).flatMap(item => item.messages || [])].slice(-10);
+      const structuredNotes = (memory.reading_notes || []).filter(note => !state.book || note.book === state.book).slice(-5).reverse();
+      const notes = structuredNotes.length ? structuredNotes : recent.slice(-5).reverse();
+      els.readingBoardContent.innerHTML = notes.length
+        ? notes.map(message => `<div class="note-card"><small>${message.type || classifyNote(message)}</small>${compactText(message.content, 88)}</div>`).join("")
+        : `<div class="note-card"><small>等待沉淀</small>你聊到章节、问题、金句和感受时，这里会自动留下笔记。</div>`;
+
+      const seeds = [
+        ...(memory.thought_nodes || []).map(node => node.label),
+        ...memory.reader_profile.insights.slice(-4),
+        ...recent.map(message => message.content)
+      ].filter(Boolean).slice(-8);
+      const positions = [
+        [58, 22], [72, 38], [61, 56], [78, 66],
+        [46, 36], [67, 78], [84, 24], [52, 70]
+      ];
+      els.thoughtMapContent.innerHTML = seeds.length
+        ? seeds.map((text, index) => {
+          const [left, top] = positions[index % positions.length];
+          return `<div class="thought-node" style="left:${left}%;top:${top}%">${compactText(extractNodeName(text), 16)}</div>`;
+        }).join("")
+        : `<div class="thought-node" style="left:62%;top:46%">等待第一个想法</div>`;
+    }
+
+    function extractNodeName(text) {
+      const clean = String(text || "").replace(/[，。！？、,.!?]/g, " ").trim();
+      const words = clean.split(/\s+/).filter(Boolean);
+      return words[0] || clean.slice(0, 12) || "思想节点";
+    }
+
+    function analyzeTurn(text) {
+      const clean = text.trim();
+      const tags = [];
+      if (/第\s*[一二三四五六七八九十百千万\d]+\s*章/.test(clean)) tags.push("chapter");
+      if (/[？?]|为什么|如何|怎么|是不是|能不能|该不该/.test(clean)) tags.push("question");
+      if (/我觉得|我感觉|触动|难受|兴奋|困惑|喜欢|不喜欢|震撼/.test(clean)) tags.push("feeling");
+      if (/记一下|记下来|金句|划线|摘录|这句话/.test(clean) || clean.length > 60) tags.push("note");
+      const factual = shouldSearch(clean);
+      if (factual) tags.push("fact_check");
+      const primary = tags.includes("feeling") ? "feeling"
+        : tags.includes("chapter") ? "chapter"
+        : tags.includes("question") ? "question"
+        : tags.includes("note") ? "note"
+        : "reflection";
+      return {
+        primary,
+        tags,
+        needsSearch: factual && !tags.includes("feeling"),
+        memoryPriority: tags.includes("note") || tags.includes("feeling") || tags.includes("chapter") ? "high" : "normal"
+      };
+    }
+
+    function buildTurnContext(analysis, searchContext) {
+      const searchLine = searchContext ? "本轮已经获得搜索资料；只在有帮助时使用，不要像报告一样复述。" : "本轮没有搜索资料；不要假装知道外部事实。";
+      return `【本轮 Agent Harness】
+意图：${analysis.primary}
+标签：${analysis.tags.join("、") || "reflection"}
+工具：${analysis.needsSearch ? "允许联网搜索" : "不需要联网搜索"}
+记忆优先级：${analysis.memoryPriority}
+${searchLine}
+
+回复策略：
+- 先接住读者此刻的问题或感受
+- 只给一个最有价值的角度
+- 结尾可以留一个自然的小问题，但不要每次都追问
+- 不输出括号动作、内心旁白、舞台说明`;
+    }
+
+    function captureTurnSignals(userText, assistantText, analysis) {
+      const memory = loadMemory();
+      const noteTypeMap = {
+        chapter: "章节",
+        question: "问题",
+        feeling: "感受",
+        note: "金句",
+        reflection: "洞察"
+      };
+      const note = {
+        date: new Date().toISOString(),
+        book: state.book,
+        mode: state.mode,
+        type: noteTypeMap[analysis.primary] || "洞察",
+        content: userText
+      };
+      memory.reading_notes = [...(memory.reading_notes || []), note].slice(-120);
+
+      const nodeLabel = extractThoughtNode(userText, assistantText, analysis);
+      if (nodeLabel && !(memory.thought_nodes || []).some(node => node.label === nodeLabel && node.book === state.book)) {
+        memory.thought_nodes = [
+          ...(memory.thought_nodes || []),
+          { date: new Date().toISOString(), book: state.book, mode: state.mode, label: nodeLabel }
+        ].slice(-80);
+      }
+      saveMemory(memory);
+    }
+
+    function extractThoughtNode(userText, assistantText, analysis) {
+      const combined = `${userText} ${assistantText}`;
+      const candidates = ["复利", "能力圈", "长期主义", "反过来想", "反脆弱", "选择", "自由", "欲望", "恐惧", "注意力", "习惯", "判断", "边界", "关系", "系统", "激励", "风险"];
+      const hit = candidates.find(item => combined.includes(item));
+      if (hit) return hit;
+      if (analysis.primary === "question") return compactText(userText.replace(/[？?]/g, ""), 14);
+      if (analysis.primary === "feeling") return compactText(userText, 12);
+      return compactText(extractNodeName(assistantText || userText), 14);
+    }
+
+    function toast(message) {
+      clearTimeout(state.toastTimer);
+      els.toast.textContent = message;
+      els.toast.classList.add("visible");
+      state.toastTimer = setTimeout(() => els.toast.classList.remove("visible"), 2600);
+    }
+
+    function setSubtitle(text, force = false, timeout = 0) {
+      const settings = loadSettings();
+      if (!force && !settings.subtitlesEnabled) {
+        els.subtitle.classList.remove("visible");
+        return;
+      }
+      els.subtitle.textContent = text;
+      els.subtitle.classList.add("visible");
+      if (timeout) setTimeout(() => els.subtitle.classList.remove("visible"), timeout);
+    }
+
+    function setCenter(text, visible = true) {
+      els.centerStatus.textContent = text;
+      els.centerStatus.classList.toggle("visible", visible);
+    }
+
+    function resetIdleTimer() {
+      clearTimeout(state.idleTimer);
+      state.idleTimer = setTimeout(showLightQuestion, 3 * 60 * 1000);
+    }
+
+    function showLightQuestion() {
+      if (!state.book || state.lightAskCount >= 3) return;
+      const questions = LIGHT_QUESTIONS[state.mode] || LIGHT_QUESTIONS.fireplace;
+      const question = questions[state.lightAskCount % questions.length];
+      state.lightAskCount += 1;
+      setSubtitle(question, true, 8000);
+      resetIdleTimer();
+    }
+
+    function startOnboardingIfNeeded() {
+      const memory = loadMemory();
+      if (memory.reader_profile.initialized) return false;
+      state.onboardingStep = 0;
+      els.onboarding.classList.add("active");
+      renderOnboarding();
+      return true;
+    }
+
+    function renderOnboarding() {
+      const prompts = ["我该怎么称呼你？", "你平时做什么？", "你喜欢怎样读书？"];
+      const placeholders = ["名字或称呼", "工作，可跳过", "比如：历史、投资、哲学，可跳过"];
+      els.onboardingTitle.textContent = prompts[state.onboardingStep];
+      els.onboardingInput.placeholder = placeholders[state.onboardingStep];
+      els.onboardingInput.value = "";
+      setTimeout(() => els.onboardingInput.focus(), 40);
+    }
+
+    function finishOnboarding() {
+      const memory = loadMemory();
+      memory.reader_profile.name = state.onboardingDraft.name;
+      memory.reader_profile.work = state.onboardingDraft.work;
+      memory.reader_profile.preferences = state.onboardingDraft.preferences
+        .split(/[，,、\s]+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+      memory.reader_profile.initialized = true;
+      saveMemory(memory);
+      els.onboarding.classList.remove("active");
+      toast("记住了。");
+      els.bookInput.focus();
+    }
+
+    function recapLastSession(memory) {
+      const last = [...memory.conversations].reverse().find(item => item.messages && item.messages.length);
+      if (!last) return "";
+      return `上次读《${last.book}》时，我们聊到：${last.summary || last.messages.slice(-2).map(m => m.content).join(" / ")}`;
+    }
+
+    function buildSystemPrompt(memory) {
+      const profile = memory.reader_profile || {};
+      const base = `你是i阅——一位融合了查理·芒格、巴菲特、纳瓦尔等大师智慧的智者。
+你不是AI助手，你是一位阅尽千帆的长者，坐在书房里，和一位年轻的朋友聊天。
+
+你的谈话风格，参照查理·芒格：
+- 直击本质，不绕弯子
+- 善于用"反过来想"
+- 引用跨学科的智慧
+- 幽默、犀利，但不尖刻
+- 从不炫耀知识，讲一个故事或打个比方
+- 承认自己不懂的东西
+- 崇尚理性、长期主义、复利思维、能力圈
+
+对话原则：
+1. 多问问题，少给答案
+2. 把书里的道理翻译成生活
+3. 记住之前的对话，自然引用
+4. 不知道就说不知道
+5. 每次 2-4 句，言简意赅
+6. 不输出思考过程，不用<think>标签
+7. 感知读者情绪，有温度的回应
+8. 适当肯定和鼓励
+9. 不输出任何括号里的舞台动作、心理活动或旁白，例如“（沉默片刻）”“（轻声说）”`;
+      const harnessPrinciples = `【Agent Harness】
+你不是单轮问答机器人。每轮都按 Observe → Route → Act → Remember → Reflect 工作：
+- Observe：先判断读者是在问事实、表达感受、记录金句、推进章节，还是寻找跨书连接
+- Route：只有事实、作者、章节背景、外部资料类问题才依赖搜索；感受和思考优先陪伴
+- Act：用当前模式给出一个高质量回应，不贪多
+- Remember：默认把读者的问题、感受、金句和章节当成长期阅读资产
+- Reflect：逐渐形成读者的思想地图，但不要在回复里暴露流程`;
+      const profileText = [
+        profile.name ? `读者称呼：${profile.name}` : "",
+        profile.work ? `读者工作：${profile.work}` : "",
+        profile.preferences?.length ? `阅读偏好：${profile.preferences.join("、")}` : "",
+        profile.currentChapter ? `当前章节：${profile.currentChapter}` : "",
+        profile.insights?.length ? `读者喜欢的表达/金句：${profile.insights.slice(-5).join(" / ")}` : "",
+        memory.reading_notes?.length ? `最近阅读笔记：${memory.reading_notes.slice(-5).map(note => `${note.type}:${note.content}`).join(" / ")}` : "",
+        memory.thought_nodes?.length ? `思想节点：${memory.thought_nodes.slice(-8).map(node => node.label).join("、")}` : ""
+      ].filter(Boolean).join("\n");
+      const evolved = profile.personality_notes ? `\n\n【人格进化——基于你对这位读者的了解】\n${profile.personality_notes}` : "";
+      return `${base}\n\n${harnessPrinciples}\n\n【体验模式】\n${MODES[state.mode].prompt}\n\n【当前读书现场】\n书名：《${state.book || "未命名"}》\n${profileText}${evolved}`;
+    }
+
+    function shouldSearch(text) {
+      return SEARCH_TRIGGERS.some(trigger => text.includes(trigger)) || /[0-9]{4}|what|who|when|where/i.test(text);
+    }
+
+    async function tavilySearch(query) {
+      const settings = loadSettings();
+      if (!settings.tavilyKey) return "";
+      const response = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: settings.tavilyKey,
+          query: `${state.book} ${query}`,
+          search_depth: "basic",
+          max_results: 3,
+          include_answer: false
+        })
+      });
+      if (!response.ok) throw new Error(`Tavily ${response.status}`);
+      const data = await response.json();
+      return (data.results || [])
+        .slice(0, 3)
+        .map((item, index) => `[搜索结果${index + 1}] ${item.title}\n${item.content}\n${item.url}`)
+        .join("\n\n");
+    }
+
+    async function callDeepSeek(messages) {
+      const settings = loadSettings();
+      if (!settings.deepseekKey) {
+        return "先在右下角设置里填 DeepSeek API Key。没有钥匙，智者也只能坐在黑暗里沉默。";
+      }
+      const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${settings.deepseekKey}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-reasoner",
+          messages,
+          temperature: 0.7,
+          max_tokens: 900
+        })
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`DeepSeek ${response.status}: ${text.slice(0, 160)}`);
+      }
+      const data = await response.json();
+      return sanitizeAssistantReply(data.choices?.[0]?.message?.content || "");
+    }
+
+    function sanitizeAssistantReply(text) {
+      return String(text || "")
+        .replace(/<think>[\s\S]*?<\/think>/g, "")
+        .replace(/（[^（）]{0,120}）/g, "")
+        .replace(/\([^()]{0,120}\)/g, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
+    }
+
+    async function speak(text) {
+      const settings = loadSettings();
+      if (!settings.ttsEnabled) {
+        els.body.classList.remove("speaking");
+        renderSettings();
+        return;
+      }
+
+      if (state.currentAudio) {
+        state.currentAudio.pause();
+        state.currentAudio = null;
+      }
+
+      try {
+        els.body.classList.add("speaking");
+        if (settings.ttsProvider === "xiaomi") {
+          await speakWithXiaomi(text, settings);
+        } else {
+          await speakWithMiniMax(text, settings);
+        }
+      } catch (error) {
+        els.body.classList.remove("speaking");
+        toast(`语音失败：${error.message}`);
+      }
+    }
+
+    async function speakWithXiaomi(text, settings) {
+      if (!settings.mimoKey) throw new Error("请先在设置里填写小米 MiMo API Key");
+      const isVoiceDesign = settings.mimoMode === "voiceDesign";
+      const isVoiceClone = settings.mimoMode === "voiceClone";
+      const audioOptions = {
+        format: "wav"
+      };
+      if (isVoiceClone) {
+        audioOptions.voice = await loadVoiceCloneSample();
+      } else if (isVoiceDesign) {
+        audioOptions.optimize_text_preview = false;
+      } else {
+        audioOptions.voice = settings.mimoVoice || "白桦";
+      }
+      const response = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": settings.mimoKey
+        },
+        body: JSON.stringify({
+          model: isVoiceClone ? "mimo-v2.5-tts-voiceclone" : isVoiceDesign ? "mimo-v2.5-tts-voicedesign" : "mimo-v2.5-tts",
+          messages: [
+            {
+              role: "user",
+              content: getMimoStylePrompt(settings)
+            },
+            {
+              role: "assistant",
+              content: sanitizeAssistantReply(text)
+            }
+          ],
+          audio: audioOptions
+        })
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`小米 MiMo ${response.status}: ${errorText.slice(0, 120)}`);
+      }
+      const data = await response.json();
+      const audioBase64 = data.choices?.[0]?.message?.audio?.data;
+      if (!audioBase64) throw new Error("小米 MiMo 没有返回音频");
+      const playbackAudio = base64ToAudio(audioBase64, "audio/wav");
+      state.currentAudio = playbackAudio;
+      state.currentAudio.onended = () => els.body.classList.remove("speaking");
+      await state.currentAudio.play();
+    }
+
+    async function loadVoiceCloneSample() {
+      const response = await fetch("assets/voice-sample.mp3");
+      if (!response.ok) throw new Error("没有找到音色样本 assets/voice-sample.mp3");
+      const blob = await response.blob();
+      return await blobToDataUrl(blob);
+    }
+
+    function blobToDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("音色样本读取失败"));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function getMimoStylePrompt(settings) {
+      if (settings.mimoStyle === "custom" && settings.mimoCustomStyle) {
+        return settings.mimoCustomStyle;
+      }
+      const styleMap = {
+        reading_friend: "像一个熟悉的读书朋友在旁边聊天，中文自然口语，松弛、不端着，不要播音腔。语速中等偏慢，句尾自然落下，有陪伴感。",
+        old_master: "一位五十多岁的中文男声，温和、沉稳、略带阅历感。说话慢一点，像读过很多书的长者，克制、有一点幽默，不要正式播报。",
+        night_radio: "午夜电台式低声朗读，声音贴近、温暖、轻一点，适合安静读书时陪伴。语速偏慢，停顿自然，不要夸张表演。",
+        coach: "像一个温和的阅读教练，语气轻快但不鸡血，带一点鼓励和推进感。自然说话，不要像公告或客服。"
+      };
+      const style = styleMap[settings.mimoStyle] || styleMap.reading_friend;
+      if (settings.mimoMode === "voiceDesign") {
+        const voice = settings.mimoVoiceDesign || "一位中文男声，嗓音温和略沙哑，像读过很多书的朋友，说话松弛、克制、有智慧感。";
+        return `${voice}\n\n朗读风格：${style}`;
+      }
+      return style;
+    }
+
+    async function speakWithMiniMax(text, settings) {
+      if (!settings.minimaxKey) throw new Error("请先在设置里填写 MiniMax API Key");
+      try {
+        const url = settings.minimaxGroup
+          ? `https://api.minimaxi.com/v1/t2a_v2?GroupId=${encodeURIComponent(settings.minimaxGroup)}`
+          : "https://api.minimaxi.com/v1/t2a_v2";
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${settings.minimaxKey}`
+          },
+          body: JSON.stringify({
+            model: "speech-2.8-hd",
+            text,
+            stream: false,
+            voice_setting: {
+              voice_id: "lengdan_xiongzhang",
+              speed: 0.92,
+              vol: 1,
+              pitch: 0
+            },
+            audio_setting: {
+              sample_rate: 32000,
+              bitrate: 128000,
+              format: "mp3",
+              channel: 1
+            }
+          })
+        });
+        if (!response.ok) throw new Error(`MiniMax ${response.status}`);
+        const data = await response.json();
+        const audioHex = data.data?.audio;
+        const audioUrl = data.data?.audio_url || data.audio_url;
+        if (audioUrl) {
+          state.currentAudio = new Audio(audioUrl);
+        } else if (audioHex) {
+          const bytes = new Uint8Array(audioHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+          const blob = new Blob([bytes], { type: "audio/mpeg" });
+          state.currentAudio = new Audio(URL.createObjectURL(blob));
+        } else {
+          throw new Error("MiniMax 没有返回音频");
+        }
+        state.currentAudio.onended = () => els.body.classList.remove("speaking");
+        await state.currentAudio.play();
+      } catch (error) {
+        els.body.classList.remove("speaking");
+        throw error;
+      }
+    }
+
+    function base64ToAudio(base64, mimeType) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: mimeType });
+      return new Audio(URL.createObjectURL(blob));
+    }
+
+    async function generateGreeting() {
+      const memory = loadMemory();
+      const recap = recapLastSession(memory);
+      const dreams = memory.dream_notes.slice(-2).map(item => item.content).join("\n");
+      const prompt = `读者以「${MODES[state.mode].name}」模式开始读《${state.book}》。请生成一句自然、有温度、符合当前模式的开场问候。${recap ? "\n" + recap : ""}${dreams ? "\n梦境笔记：" + dreams : ""}`;
+      try {
+        setCenter("...", true);
+        const text = await callDeepSeek([
+          { role: "system", content: buildSystemPrompt(memory) },
+          { role: "user", content: prompt }
+        ]);
+        setCenter("", false);
+        setSubtitle(text, true);
+        await speak(text);
+      } catch (error) {
+        setCenter("", false);
+        const fallback = `今晚就从《${state.book}》开始。你先读，我在旁边；有触动的地方，叫我一声。`;
+        setSubtitle(fallback, true);
+        toast(`问候失败：${error.message}`);
+      }
+    }
+
+    function updateMemoryAfterUserText(text) {
+      const memory = loadMemory();
+      const chapter = text.match(/第\s*([一二三四五六七八九十百千万\d]+)\s*章/);
+      if (chapter) memory.reader_profile.currentChapter = `第${chapter[1]}章`;
+      if (text.length > 40 && !memory.reader_profile.insights.includes(text)) {
+        memory.reader_profile.insights.push(text);
+        memory.reader_profile.insights = memory.reader_profile.insights.slice(-20);
+      }
+      saveMemory(memory);
+    }
+
+    function persistSession() {
+      const memory = loadMemory();
+      if (!state.book || !state.messages.length) return;
+      const summary = state.messages.slice(-4).map(message => `${message.role === "user" ? "读者" : "i阅"}：${message.content}`).join(" / ").slice(0, 360);
+      const current = {
+        date: new Date().toISOString(),
+        book: state.book,
+        mode: state.mode,
+        summary,
+        messages: state.messages.slice(-20)
+      };
+      const existingIndex = memory.conversations.findIndex(item => item.book === state.book && Date.now() - new Date(item.date).getTime() < 12 * 60 * 60 * 1000);
+      if (existingIndex >= 0) memory.conversations[existingIndex] = current;
+      else memory.conversations.push(current);
+      memory.conversations = memory.conversations.slice(-50);
+      if (!memory.reader_profile.reading_history.includes(state.book)) {
+        memory.reader_profile.reading_history.push(state.book);
+      }
+      memory.reader_profile.reading_history = memory.reader_profile.reading_history.slice(-30);
+      saveMemory(memory);
+    }
+
+    async function consolidateDreams() {
+      const memory = loadMemory();
+      const now = Date.now();
+      if (now - memory.last_consolidation < 24 * 60 * 60 * 1000) return;
+      const recent = memory.conversations.slice(-6).filter(item => item.messages?.length >= 2);
+      if (!recent.length || !loadSettings().deepseekKey) return;
+      try {
+        const content = recent.map(item => `《${item.book}》：${item.summary}`).join("\n");
+        const result = await callDeepSeek([
+          { role: "system", content: buildSystemPrompt(memory) },
+          { role: "user", content: `请做一次梦境整理，分两段：1. 读者最近在想什么、书之间有什么关联；2. 你应该如何更好地和这位读者说话。\n${content}` }
+        ]);
+        memory.dream_notes.push({ date: new Date().toISOString(), content: result });
+        memory.dream_notes = memory.dream_notes.slice(-12);
+        memory.reader_profile.personality_notes = result.slice(0, 1000);
+        memory.last_consolidation = now;
+        saveMemory(memory);
+      } catch {
+        memory.last_consolidation = now;
+        saveMemory(memory);
+      }
+    }
+
+    async function handleUserMessage(text) {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      closeInput();
+      resetIdleTimer();
+      const analysis = analyzeTurn(trimmed);
+      updateMemoryAfterUserText(trimmed);
+      state.messages.push({ role: "user", content: trimmed });
+      setSubtitle(trimmed, true);
+      renderCompanionPanels();
+      setCenter("...", true);
+
+      try {
+        const memory = loadMemory();
+        let searchContext = "";
+        if (analysis.needsSearch) {
+          try {
+            searchContext = await tavilySearch(trimmed);
+            if (searchContext) toast("查了一点资料。");
+          } catch (error) {
+            toast(`搜索跳过：${error.message}`);
+          }
+        }
+        const messages = [
+          { role: "system", content: buildSystemPrompt(memory) },
+          { role: "system", content: buildTurnContext(analysis, searchContext) },
+          ...state.messages.slice(-10)
+        ];
+        if (searchContext) {
+          messages.splice(1, 0, { role: "system", content: `以下是按需联网搜索结果，只在可靠时使用，不要机械复述：\n${searchContext}` });
+        }
+        const reply = await callDeepSeek(messages);
+        state.messages.push({ role: "assistant", content: reply });
+        setCenter("", false);
+        setSubtitle(reply, true);
+        captureTurnSignals(trimmed, reply, analysis);
+        persistSession();
+        renderCompanionPanels();
+        await speak(reply);
+        resetIdleTimer();
+      } catch (error) {
+        setCenter("", false);
+        const message = `这里卡住了：${error.message}`;
+        setSubtitle(message, true);
+        toast(message);
+      }
+    }
+
+    function openInput() {
+      els.inputDock.classList.add("open");
+      setTimeout(() => els.textInput.focus(), 20);
+    }
+
+    function closeInput() {
+      els.inputDock.classList.remove("open");
+      els.textInput.value = "";
+      els.textInput.blur();
+    }
+
+    function renderMemory() {
+      const memory = loadMemory();
+      const profile = memory.reader_profile;
+      const parts = [
+        `<div class="memory-item"><strong>读者</strong><br>${profile.name || "未命名"}${profile.work ? " · " + profile.work : ""}<br>${profile.preferences?.length ? "偏好：" + profile.preferences.join("、") : "暂无偏好"}</div>`,
+        `<div class="memory-item"><strong>正在读</strong><br>${state.book || "尚未开始"}${profile.currentChapter ? " · " + profile.currentChapter : ""}</div>`,
+        `<div class="memory-item"><strong>人格进化</strong><br>${profile.personality_notes || "还没有形成稳定的沟通策略。"}</div>`,
+        `<div class="memory-item"><strong>最近对话</strong><br>${memory.conversations.slice(-5).reverse().map(item => `《${item.book}》：${item.summary || "无摘要"}`).join("<br><br>") || "暂无"}</div>`,
+        `<div class="memory-item"><strong>梦境笔记</strong><br>${memory.dream_notes.slice(-3).reverse().map(item => item.content).join("<br><br>") || "暂无"}</div>`
+      ];
+      els.memoryContent.innerHTML = parts.join("");
+    }
+
+    function openModal(modal) {
+      modal.classList.add("active");
+    }
+
+    function closeModal(modal) {
+      modal.classList.remove("active");
+    }
+
+    async function startBook(book) {
+      state.book = book.trim();
+      if (!state.book) return;
+      state.messages = [];
+      state.lightAskCount = 0;
+      els.boot.classList.add("hidden");
+      await new Promise(resolve => setTimeout(resolve, 900));
+      await generateGreeting();
+      await consolidateDreams();
+      renderCompanionPanels();
+      resetIdleTimer();
+    }
+
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return null;
+      const recognition = new SpeechRecognition();
+      recognition.lang = "zh-CN";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.onstart = () => {
+        els.body.classList.add("listening");
+        setCenter("听", true);
+      };
+      recognition.onend = () => {
+        els.body.classList.remove("listening");
+        setCenter("", false);
+      };
+      recognition.onresult = event => {
+        const text = event.results?.[0]?.[0]?.transcript || "";
+        if (text) {
+          setSubtitle(text, true);
+          els.textInput.value = text;
+          openInput();
+        }
+      };
+      recognition.onerror = event => toast(`识别失败：${event.error}`);
+      return recognition;
+    }
+
+    els.bookInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") startBook(els.bookInput.value);
+    });
+
+    els.onboardingInput.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      const value = els.onboardingInput.value.trim();
+      if (state.onboardingStep === 0) state.onboardingDraft.name = value;
+      if (state.onboardingStep === 1) state.onboardingDraft.work = value;
+      if (state.onboardingStep === 2) state.onboardingDraft.preferences = value;
+      state.onboardingStep += 1;
+      if (state.onboardingStep > 2) finishOnboarding();
+      else renderOnboarding();
+    });
+
+    els.textForm.addEventListener("submit", event => {
+      event.preventDefault();
+      handleUserMessage(els.textInput.value);
+    });
+
+    let spaceDownAt = 0;
+    let spaceOpenTimer = null;
+    document.addEventListener("keydown", event => {
+      const active = document.activeElement;
+      const isTyping = active && ["INPUT", "TEXTAREA"].includes(active.tagName);
+      if (event.key === "Escape") {
+        closeInput();
+        closeModal(els.settingsModal);
+        closeModal(els.memoryModal);
+      }
+      if (event.code === "Space" && !event.repeat && state.book && !isTyping) {
+        event.preventDefault();
+        spaceDownAt = Date.now();
+        clearTimeout(spaceOpenTimer);
+        spaceOpenTimer = setTimeout(() => {
+          if (spaceDownAt && state.recognition) {
+            try { state.recognition.start(); } catch {}
+          }
+        }, 420);
+      }
+    });
+
+    document.addEventListener("keyup", event => {
+      if (event.code !== "Space" || !state.book || !spaceDownAt) return;
+      event.preventDefault();
+      const held = Date.now() - spaceDownAt;
+      spaceDownAt = 0;
+      clearTimeout(spaceOpenTimer);
+      if (held <= 420) openInput();
+    });
+
+    els.inputDock.addEventListener("click", openInput);
+    els.settingsButton.addEventListener("click", () => openModal(els.settingsModal));
+    els.memoryButton.addEventListener("click", () => {
+      renderMemory();
+      openModal(els.memoryModal);
+    });
+    els.closeSettings.addEventListener("click", () => closeModal(els.settingsModal));
+    els.closeMemory.addEventListener("click", () => closeModal(els.memoryModal));
+    els.saveSettings.addEventListener("click", () => {
+      saveSettings(settingsFromForm());
+      toast("设置已保存。");
+      closeModal(els.settingsModal);
+    });
+    els.clearMemory.addEventListener("click", () => {
+      if (!confirm("确定清空 i阅 的本地记忆？")) return;
+      saveMemory(defaultMemory());
+      renderMemory();
+      toast("记忆已清空。");
+    });
+    els.exportMemory.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(loadMemory(), null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `iyue-memory-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    window.addEventListener("beforeunload", persistSession);
+    setInterval(consolidateDreams, 2 * 60 * 60 * 1000);
+
+    pauseTtsForQuota();
+    activateLocalVoiceClone();
+    renderSettings();
+    renderMode();
+    state.recognition = initSpeechRecognition();
+    startOnboardingIfNeeded();
+    setTimeout(() => els.bookInput.focus(), 80);
+  </script>
+</body>
+</html>

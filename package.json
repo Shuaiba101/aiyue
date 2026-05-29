@@ -1,0 +1,40 @@
+{
+  "name": "iyue-desktop",
+  "version": "0.1.0",
+  "description": "i阅 - AI 读书伴侣桌面版",
+  "main": "main.js",
+  "author": "zhouyinyun",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "pack:mac": "electron-builder --mac --dir",
+    "dist:mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.aiyue.desktop",
+    "productName": "i阅",
+    "files": [
+      "main.js",
+      "preload.js",
+      "i阅.html",
+      "i阅-选择版本.html",
+      "i阅-炉边智者.html",
+      "i阅-书桌笔记.html",
+      "i阅-思维星图.html",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  }
+}

@@ -1,0 +1,101 @@
+import { z } from "zod";
+import { demoReply, sanitizeAssistantReply } from "@/lib/core.mjs";
+
+export const runtime = "nodejs";
+
+const requestSchema = z.object({
+  book: z.string().min(1),
+  mode: z.enum(["fireplace", "desk", "starmap"]),
+  needsSearch: z.boolean().default(false),
+  userApiKey: z.string().optional(),
+  systemPrompt: z.string().min(1),
+  messages: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string()
+  })).min(1)
+});
+
+async function tavilySearch(book: string, query: string) {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return "";
+
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: apiKey,
+      query: `${book} ${query}`,
+      search_depth: "basic",
+      max_results: 3,
+      include_answer: false
+    })
+  });
+
+  if (!response.ok) return "";
+  const data = await response.json();
+  return (data.results || [])
+    .slice(0, 3)
+    .map((item: { title?: string; content?: string; url?: string }, index: number) => {
+      return `[搜索结果${index + 1}] ${item.title || ""}\n${item.content || ""}\n${item.url || ""}`;
+    })
+    .join("\n\n");
+}
+
+export async function POST(request: Request) {
+  const parsed = requestSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return Response.json({ error: "请求格式不对。" }, { status: 400 });
+  }
+
+  const input = parsed.data;
+  const apiKey = input.userApiKey?.trim() || process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) {
+    const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content || "";
+    return Response.json({
+      reply: demoReply(input.book, lastUserMessage),
+      usedSearch: false,
+      demo: true
+    });
+  }
+
+  const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content || "";
+  const searchContext = input.needsSearch ? await tavilySearch(input.book, lastUserMessage) : "";
+  const messages = [
+    { role: "system", content: input.systemPrompt },
+    {
+      role: "system",
+      content: `【本轮 Agent Harness】
+工具：${searchContext ? "已获得联网搜索资料" : "未使用联网搜索"}
+回复策略：
+- 先接住读者此刻的问题或感受
+- 只给一个最有价值的角度
+- 结尾可以留一个自然的小问题，但不要每次都追问
+- 不输出括号动作、内心旁白、舞台说明`
+    },
+    ...(searchContext ? [{ role: "system", content: `以下是按需联网搜索结果，只在可靠时使用，不要机械复述：\n${searchContext}` }] : []),
+    ...input.messages
+  ];
+
+  const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "deepseek-reasoner",
+      messages,
+      temperature: 0.7,
+      max_tokens: 900
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    return Response.json({ error: `DeepSeek ${response.status}: ${text.slice(0, 160)}` }, { status: 502 });
+  }
+
+  const data = await response.json();
+  const reply = sanitizeAssistantReply(data.choices?.[0]?.message?.content || "");
+  return Response.json({ reply, usedSearch: Boolean(searchContext) });
+}
