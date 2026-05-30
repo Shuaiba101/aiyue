@@ -64,13 +64,13 @@ export async function POST(request: Request) {
     { role: "system", content: input.systemPrompt },
     {
       role: "system",
-      content: `【本轮 Agent Harness】
-工具：${searchContext ? "已获得联网搜索资料" : "未使用联网搜索"}
-回复策略：
-- 先接住读者此刻的问题或感受
-- 只给一个最有价值的角度
-- 结尾可以留一个自然的小问题，但不要每次都追问
-- 不输出括号动作、内心旁白、舞台说明`
+      content: `【本轮陪伴】
+工具：${searchContext ? "已查了一点资料" : "未联网搜索"}
+策略：
+- 读者自己读纸质书，你只是陪着；接住他这条消息，不要抢话、不要代读
+- 他说什么都能聊：书里的、生活的、情绪的，都先接住
+- 自然运用你对他的记忆，让他感到被懂、被记着
+- 2-4 句，留一个好问题；不输出括号旁白`
     },
     ...(searchContext ? [{ role: "system", content: `以下是按需联网搜索结果，只在可靠时使用，不要机械复述：\n${searchContext}` }] : []),
     ...input.messages

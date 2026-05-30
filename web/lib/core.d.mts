@@ -33,6 +33,8 @@ export type DreamNote = { date: string; content: string };
 export type ReaderProfile = {
   name: string;
   work: string;
+  life_focus: string;
+  companion_preference: string;
   preferences: string[];
   reading_history: string[];
   currentChapter: string;
@@ -71,6 +73,13 @@ export function shouldSearch(text: string): boolean;
 export function sanitizeAssistantReply(text: string): string;
 export function demoReply(book: string, userText: string): string;
 export function buildSystemPrompt(memory: Memory, book: string, mode: ModeKey): string;
+export function hasBookHistory(memory: Memory, book: string): boolean;
+export function buildBookRecallContext(memory: Memory, book: string): string;
+export function buildWelcomeBackHint(memory: Memory, now?: number): string;
+export function buildNewBookGreetingUserMessage(memory: Memory, book: string): string;
+export function buildReturnGreetingUserMessage(memory: Memory, book: string): string;
+export function fallbackReturnGreeting(memory: Memory, book: string): string;
+export function getLastConversationForBook(memory: Memory, book: string): Conversation | null;
 export function captureTurn(
   memory: Memory,
   input: { book: string; mode: ModeKey; userText: string; assistantText: string }
