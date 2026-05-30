@@ -15,6 +15,7 @@ import {
   commitTurn,
   defaultMemory,
   detectReplyStance,
+  ensureReaderReady,
   fallbackReturnGreeting,
   formatTimelineEntry,
   getBookSessionMessages,
@@ -91,10 +92,6 @@ export default function Home() {
   const [localEntered, setLocalEntered] = useState(false);
   const [memoryReady, setMemoryReady] = useState(false);
 
-  // 首次进入：三步了解用户（称呼 / 工作与生活 / 诉求与陪伴方式）
-  const [onboardStep, setOnboardStep] = useState(0);
-  const [onboardDraft, setOnboardDraft] = useState({ name: "", work: "", lifeFocus: "", companion: "" });
-
   const inputRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,16 +147,15 @@ export default function Home() {
     if (entered && !session) setSession(defaultSession(authEmail));
   }, [entered, session, authEmail]);
 
-  // 完成画像引导后才进入选书；有近期记录则牵挂式提示，否则默认开场。
+  // 登录后直接进入选书；有近期记录则牵挂式提示，否则默认开场。
   useEffect(() => {
-    if (!entered || !memoryReady || onboardStep > 0) return;
-    if (!memory.reader_profile.initialized) return;
+    if (!entered || !memoryReady) return;
     if (!book) {
       const hint = buildWelcomeBackHint(memory);
       setSubtitle(hint || GREETING);
       setInputOpen(true);
     }
-  }, [entered, book, memoryReady, onboardStep, memory]);
+  }, [entered, book, memoryReady, memory]);
 
   // 记忆按身份加载：登录走云端（首登自动迁移本地），未登录走本地。
   useEffect(() => {
@@ -167,25 +163,17 @@ export default function Home() {
     let cancelled = false;
     loadMemory(authUserId).then((loaded) => {
       if (cancelled) return;
-      setMemory(loaded);
+      const ready = ensureReaderReady(loaded, authEmail);
+      setMemory(ready);
       hydratedRef.current = true;
       setMemoryReady(true);
-      if (!loaded.reader_profile.initialized) {
-        setOnboardDraft({
-          name: loaded.reader_profile.name || "",
-          work: loaded.reader_profile.work || "",
-          lifeFocus: loaded.reader_profile.life_focus || "",
-          companion: loaded.reader_profile.companion_preference || ""
-        });
-        setOnboardStep(1);
-      }
     });
     return () => {
       cancelled = true;
     };
-  }, [authUserId]);
+  }, [authUserId, authEmail]);
 
-  // 记忆变化后防抖落盘：本地缓存 + 云端 upsert（hydrate 完成后才写，避免初始值覆盖云端）。
+  // 记忆变化后防抖落盘
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -245,41 +233,6 @@ export default function Home() {
     } finally {
       setAuthBusy(false);
     }
-  }
-
-  function finishOnboarding() {
-    const name = onboardDraft.name.trim();
-    const work = onboardDraft.work.trim();
-    const lifeFocus = onboardDraft.lifeFocus.trim();
-    const companion = onboardDraft.companion.trim();
-    if (!name) {
-      flash("先告诉我怎么称呼你。");
-      return;
-    }
-    if (!work) {
-      flash("简单说说你是做什么的，或在什么样的生活状态。");
-      return;
-    }
-    if (!lifeFocus && !companion) {
-      flash("说说你现在最想解决什么，或者希望我怎么陪你。");
-      return;
-    }
-    setMemory((current) => ({
-      ...current,
-      reader_profile: {
-        ...current.reader_profile,
-        name,
-        work,
-        life_focus: lifeFocus,
-        companion_preference: companion,
-        initialized: true
-      }
-    }));
-    setSession((current) => (current ? { ...current, name } : current));
-    setOnboardStep(0);
-    setSubtitle(GREETING);
-    setInputOpen(true);
-    flash(`好的，${name}。`);
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -888,93 +841,6 @@ export default function Home() {
       <main className="reader">
         <div className="outerHalo" />
         <div className="glowCore" />
-      </main>
-    );
-  }
-
-  // ② 首次进入：三步了解用户
-  if (onboardStep > 0) {
-    return (
-      <main className="reader landing onboarding">
-        <div className="outerHalo" />
-        <div className="glowCore invitePulse" />
-        <section className="loginShell onboardShell">
-          <div className="loginIntro">
-            <div className="bootBrand">i阅</div>
-            <p className="onboardProgress">认识一下 · {onboardStep}/3</p>
-            {onboardStep === 1 && (
-              <>
-                <h1>怎么称呼你？</h1>
-                <p>我会用这个称呼陪你读书，也会写进记忆里。</p>
-              </>
-            )}
-            {onboardStep === 2 && (
-              <>
-                <h1>你是做什么的？</h1>
-                <p>不用很正式——工作、角色，或者最近的生活状态，都可以。</p>
-              </>
-            )}
-            {onboardStep === 3 && (
-              <>
-                <h1>此刻最想解决什么？</h1>
-                <p>以及，你希望 i阅 怎么陪你——少说教、多提问，还是更像朋友闲聊？</p>
-              </>
-            )}
-          </div>
-          <form
-            className="loginForm"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (onboardStep === 1 && !onboardDraft.name.trim()) {
-                flash("先告诉我怎么称呼你。");
-                return;
-              }
-              if (onboardStep === 2 && !onboardDraft.work.trim()) {
-                flash("简单说说你是做什么的，或在什么样的生活状态。");
-                return;
-              }
-              if (onboardStep < 3) setOnboardStep((onboardStep + 1) as 1 | 2 | 3);
-              else finishOnboarding();
-            }}
-          >
-            {onboardStep === 1 && (
-              <input
-                autoFocus
-                value={onboardDraft.name}
-                onChange={(event) => setOnboardDraft((draft) => ({ ...draft, name: event.target.value }))}
-                placeholder="例如：周先生、阿阅"
-              />
-            )}
-            {onboardStep === 2 && (
-              <textarea
-                autoFocus
-                rows={3}
-                value={onboardDraft.work}
-                onChange={(event) => setOnboardDraft((draft) => ({ ...draft, work: event.target.value }))}
-                placeholder="例如：产品经理，最近在换工作 / 全职妈妈，晚上才有自己的阅读时间"
-              />
-            )}
-            {onboardStep === 3 && (
-              <>
-                <textarea
-                  autoFocus
-                  rows={2}
-                  value={onboardDraft.lifeFocus}
-                  onChange={(event) => setOnboardDraft((draft) => ({ ...draft, lifeFocus: event.target.value }))}
-                  placeholder="最想解决的问题：例如想搞清职业方向、缓解焦虑、把书读进去"
-                />
-                <textarea
-                  rows={2}
-                  value={onboardDraft.companion}
-                  onChange={(event) => setOnboardDraft((draft) => ({ ...draft, companion: event.target.value }))}
-                  placeholder="希望的陪伴方式：例如别讲大道理，多问我感受"
-                />
-              </>
-            )}
-            <button type="submit">{onboardStep < 3 ? "下一步" : "开始阅读"}</button>
-          </form>
-        </section>
-        {toast && <div className="toast loginToast">{toast}</div>}
       </main>
     );
   }

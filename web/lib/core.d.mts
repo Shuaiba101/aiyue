@@ -88,6 +88,7 @@ export function buildTurnCompanionPrompt(input: {
 export function sanitizeAssistantReply(text: string): string;
 export function demoReply(book: string, userText: string): string;
 export function buildSystemPrompt(memory: Memory, book: string, mode: ModeKey): string;
+export function ensureReaderReady(memory: Memory, email?: string): Memory;
 export function hasBookHistory(memory: Memory, book: string): boolean;
 export function buildBookRecallContext(memory: Memory, book: string): string;
 export function buildWelcomeBackHint(memory: Memory, now?: number): string;

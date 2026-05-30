@@ -185,6 +185,19 @@ export function buildTurnCompanionPrompt({ phase, stance, searchUsed, trajectory
 硬约束：2-4 句；不输出括号旁白；不替他把书读完；读者记得的应该是自己想通的，不是你讲的道理。${trajectoryBlock}`;
 }
 
+/** 跳过填表式引导：登录后直接进入选书，从读书和聊天中慢慢认识读者。 */
+export function ensureReaderReady(memory, email = "") {
+  const m = normalizeMemory(memory);
+  if (m.reader_profile.initialized) return m;
+  const next = structuredClone(m);
+  const fallbackName = String(email || "").split("@")[0]?.trim() || "";
+  if (!next.reader_profile.name && fallbackName) {
+    next.reader_profile.name = fallbackName;
+  }
+  next.reader_profile.initialized = true;
+  return next;
+}
+
 /** 构建带记忆与人格进化的 System Prompt。 */
 export function buildSystemPrompt(memory, book, mode) {
   const m = normalizeMemory(memory);
@@ -248,7 +261,7 @@ export function buildSystemPrompt(memory, book, mode) {
 你跨书记住的是「这个人」，不是把书架连成网。用记忆去更懂他、呼应他的变化（「上次你在这里停了很久」），不是复述他说过的清单。
 
 【你记住的这个人】
-${knowsPerson ? personText : "（刚认识这位读者——多听、多记：他怎么称呼、在意什么、为什么此刻翻开这本书。）"}
+${knowsPerson ? personText : "（刚认识——别查户口式追问称呼、工作、身份；从他在读的书和愿意分享的话里，慢慢懂他。）"}
 ${profile.personality_notes ? `\n和他聊得更好的方式（越聊越懂他之后积累的理解）：\n${profile.personality_notes}` : ""}
 
 【体验模式】
@@ -327,8 +340,8 @@ export function buildWelcomeBackHint(memory, now = Date.now()) {
 /** 新开一本书时的问候请求（给模型）。 */
 export function buildNewBookGreetingUserMessage(memory, book) {
   const name = normalizeMemory(memory).reader_profile.name;
-  const who = name ? `读者叫${name}。` : "";
-  return `${who}我今晚要读纸质书《${book}》，书在我手里，这是我们第一次聊这本书。用一两句自然的话打招呼：强调你会陪着读、想聊什么都可以找你、你会帮着记。别客套，可问一个跟这本书或此刻心情有关的小问题。2-4句。`;
+  const who = name ? `若自然合适可称呼${name}，但不要刻意。` : "";
+  return `${who}我今晚要读纸质书《${book}》，书在我手里，这是我们第一次聊这本书。像刚认识的朋友一样打招呼：别问户口式问题，从书或此刻心情轻轻接一句。强调你会陪着读、想聊什么都可以、你会帮着记。2-4句。`;
 }
 
 /** 回到老书时的牵挂式问候请求（给模型）。 */
