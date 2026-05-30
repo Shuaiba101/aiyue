@@ -808,6 +808,40 @@ button {
   width: min(680px, calc(100vw - 56px));
 }
 
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 220, 170, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 220, 170, 0.04);
+}
+
+.switchRow strong {
+  display: block;
+  font-weight: 420;
+  color: rgba(255, 244, 224, 0.92);
+}
+
+.switchRow small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 238, 215, 0.52);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.switchRow input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: rgba(220, 150, 70, 0.85);
+  cursor: pointer;
+}
+
 .planStrip {
   display: flex;
   align-items: center;

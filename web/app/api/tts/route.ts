@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.MIMO_API_KEY;
   if (!apiKey) {
-    return Response.json({ error: "还没有配置 MIMO_API_KEY，先使用浏览器临时朗读。" }, { status: 501 });
+    return Response.json({ error: "还没有配置 MIMO_API_KEY。" }, { status: 501 });
   }
 
   const { text, voice, style, voiceSample } = parsed.data;

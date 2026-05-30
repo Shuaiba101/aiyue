@@ -30,6 +30,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadMemory, saveMemory, clearLocalMemory } from "@/lib/memory-store";
 import { FREE_TRIAL_TURNS, type QuotaPlan } from "@/lib/quota/constants";
+import { speakText, stopSpeaking } from "@/lib/tts-client";
 
 type UserSession = {
   name: string;
@@ -37,6 +38,7 @@ type UserSession = {
   plan: QuotaPlan;
   trialRemaining: number;
   userApiKey: string;
+  ttsEnabled: boolean;
 };
 type AuthTab = "invite" | "apply" | "login";
 
@@ -46,7 +48,7 @@ const GREETING = "今天你想读什么书？书在你手里，有想聊的随�
 
 function defaultSession(email: string): UserSession {
   const name = (email || "").split("@")[0] || "读者";
-  return { name, email, plan: "trial", trialRemaining: FREE_TRIAL_TURNS, userApiKey: "" };
+  return { name, email, plan: "trial", trialRemaining: FREE_TRIAL_TURNS, userApiKey: "", ttsEnabled: true };
 }
 
 export default function Home() {
@@ -79,17 +81,26 @@ export default function Home() {
   const [wechatEnabled, setWechatEnabled] = useState(false);
   const [localEntered, setLocalEntered] = useState(false);
   const [memoryReady, setMemoryReady] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revealRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const speakTokenRef = useRef(0);
 
   const entered = cloudEnabled ? Boolean(authUserId) : localEntered;
 
   useEffect(() => {
     try {
-      setSession(JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
+      const raw = JSON.parse(localStorage.getItem(SESSION_KEY) || "null") as UserSession | null;
+      if (raw) {
+        setSession({
+          ...defaultSession(raw.email || ""),
+          ...raw,
+          ttsEnabled: raw.ttsEnabled !== false
+        });
+      }
     } catch {
       // 本地解析失败保持默认。
     }
@@ -243,6 +254,7 @@ export default function Home() {
 
   useEffect(() => () => {
     if (revealRef.current) clearInterval(revealRef.current);
+    stopSpeaking();
   }, []);
 
   async function startWechatLogin() {
@@ -418,6 +430,9 @@ export default function Home() {
   async function signOut() {
     const supabase = getSupabaseBrowser();
     if (supabase) await supabase.auth.signOut();
+    stopSpeaking();
+    speakTokenRef.current += 1;
+    setIsSpeaking(false);
     clearLocalMemory();
     setAuthUserId(null);
     setAuthEmail("");
@@ -434,10 +449,29 @@ export default function Home() {
     flash("已退出登录。");
   }
 
-  // 文字送达：思考结束后逐字显示 i阅 的回复。
+  // 文字送达 + MiMo 语音：思考结束后逐字显示，同时朗读 i阅 的回复。
   function deliver(text: string) {
     setIsThinking(false);
     revealText(text);
+
+    if (session?.ttsEnabled === false) return;
+
+    const token = ++speakTokenRef.current;
+    void (async () => {
+      const ok = await speakText({
+        text,
+        onStart: () => {
+          if (token !== speakTokenRef.current) return;
+          setIsSpeaking(true);
+        },
+        onEnd: () => {
+          if (token !== speakTokenRef.current) return;
+          setIsSpeaking(false);
+        }
+      });
+      if (token !== speakTokenRef.current) return;
+      if (!ok) setIsSpeaking(false);
+    })();
   }
 
   function commitAndSave(
@@ -642,7 +676,13 @@ export default function Home() {
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") || "").trim() || session?.name || "读者";
     const userApiKey = String(form.get("userApiKey") || "").trim();
-    setSession((current) => (current ? { ...current, name, userApiKey } : current));
+    const ttsEnabled = form.get("ttsEnabled") === "on";
+    setSession((current) => (current ? { ...current, name, userApiKey, ttsEnabled } : current));
+    if (!ttsEnabled) {
+      stopSpeaking();
+      speakTokenRef.current += 1;
+      setIsSpeaking(false);
+    }
     if (name) {
       setMemory((current) => ({
         ...current,
@@ -870,7 +910,7 @@ export default function Home() {
 
   // ③ 进入即对话 + 阅读陪伴
   return (
-    <main className={`reader ${isThinking ? "thinking" : ""} ${!book && !isThinking ? "invite" : ""}`} onKeyDown={handleKeyDown} tabIndex={-1}>
+    <main className={`reader ${isThinking ? "thinking" : ""} ${isSpeaking ? "speaking" : ""} ${!book && !isThinking ? "invite" : ""}`} onKeyDown={handleKeyDown} tabIndex={-1}>
       <div className="outerHalo" />
       <div className={`glowCore ${!book && !isThinking ? "invitePulse" : ""}`} />
 
@@ -895,7 +935,15 @@ export default function Home() {
         </div>
       )}
       <div className="bottomHint">
-        {isThinking ? "i阅 在想…" : !book ? "输入书名，按 Enter 开始" : "书在你手里 · 有想聊的随时发"}
+        {isSpeaking
+          ? "i阅 在说话…"
+          : isThinking
+            ? "i阅 在想…"
+            : session.ttsEnabled === false
+              ? "文字模式 · 语音已关闭"
+              : !book
+                ? "输入书名，按 Enter 开始"
+                : "书在你手里 · 有想聊的随时发"}
       </div>
 
       {!book && !isThinking && <div className="breathCue" aria-hidden="true" />}
@@ -979,6 +1027,14 @@ export default function Home() {
 
             <label>称呼</label>
             <input name="name" defaultValue={session.name} />
+
+            <label className="switchRow">
+              <span>
+                <strong>语音朗读</strong>
+                <small>用 MiMo 把 i阅 的回复读出来（炉边陪读感）</small>
+              </span>
+              <input defaultChecked={session.ttsEnabled !== false} name="ttsEnabled" type="checkbox" />
+            </label>
 
             <label>高级：DeepSeek API Key（留空用平台额度）</label>
             <input name="userApiKey" defaultValue={session.userApiKey} placeholder="sk-..." />
