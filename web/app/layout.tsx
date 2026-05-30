@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,14 +21,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("iyue_theme_v1");document.documentElement.setAttribute("data-theme",t==="day"?"day":"night");}catch(e){document.documentElement.setAttribute("data-theme","night");}})();`
-          }}
-        />
-      </head>
-      <body>{children}</body>
+      <body>
+        <Script id="iyue-theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem("iyue_theme_v1");document.documentElement.setAttribute("data-theme",t==="day"?"day":"night");}catch(e){document.documentElement.setAttribute("data-theme","night");}})();`}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

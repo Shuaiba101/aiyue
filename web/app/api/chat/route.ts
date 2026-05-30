@@ -139,7 +139,12 @@ export async function POST(request: Request) {
 
   let audio: string | undefined;
   if (input.wantTts && process.env.MIMO_API_KEY && reply) {
-    audio = (await synthesizeMimoSpeech(reply)) || undefined;
+    try {
+      audio = (await synthesizeMimoSpeech(reply)) || undefined;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      console.warn("[api/chat] TTS 失败，仍返回文字：", message);
+    }
   }
 
   return Response.json({ reply, usedSearch: Boolean(searchContext), quota, audio });
