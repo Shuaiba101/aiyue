@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isBetaClosed } from "@/lib/beta/config";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { WECHAT_OPEN_APP_ID, WECHAT_OPEN_APP_SECRET, wechatRedirectUri } from "@/lib/wechat/config";
 
@@ -52,6 +53,9 @@ export async function GET(request: Request) {
   );
 
   if (!matched) {
+    if (isBetaClosed()) {
+      return fail("内测期间，新用户需要邀请码注册。微信登录仅限已有账号。");
+    }
     const created = await admin.auth.admin.createUser({
       email,
       password: passwordSeed,

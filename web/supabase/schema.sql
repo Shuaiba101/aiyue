@@ -40,3 +40,15 @@ drop trigger if exists trg_memories_updated_at on public.memories;
 create trigger trg_memories_updated_at
   before update on public.memories
   for each row execute function public.touch_memories_updated_at();
+
+-- 内测申请：用户登记邮箱，管理员在 Supabase 控制台查看后手动发邀请码。
+create table if not exists public.beta_applications (
+  id         uuid primary key default gen_random_uuid(),
+  email      text not null,
+  note       text not null default '',
+  created_at timestamptz not null default now(),
+  unique (email)
+);
+
+alter table public.beta_applications enable row level security;
+-- 不开放 anon/authenticated 策略；仅 service role（API 路由）可读写。

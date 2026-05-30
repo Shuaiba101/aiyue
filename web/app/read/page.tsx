@@ -29,6 +29,7 @@ type UserSession = {
   trialRemaining: number;
   userApiKey: string;
 };
+type AuthTab = "invite" | "apply" | "login";
 type BrowserSpeechRecognition = {
   lang: string;
   interimResults: boolean;
@@ -73,6 +74,11 @@ export default function Home() {
   const [authEmailDraft, setAuthEmailDraft] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [betaClosed, setBetaClosed] = useState(false);
+  const [authTab, setAuthTab] = useState<AuthTab>("invite");
+  const [inviteCodeDraft, setInviteCodeDraft] = useState("");
+  const [applyNoteDraft, setApplyNoteDraft] = useState("");
+  const [applySubmitted, setApplySubmitted] = useState(false);
   const [wechatEnabled, setWechatEnabled] = useState(false);
   const [localEntered, setLocalEntered] = useState(false);
   const [memoryReady, setMemoryReady] = useState(false);
@@ -105,6 +111,22 @@ export default function Home() {
       setAuthEmail(sess?.user?.email ?? "");
     });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/beta/status")
+      .then((res) => res.json())
+      .then((data) => setBetaClosed(Boolean(data.closed)))
+      .catch(() => setBetaClosed(false));
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("auth_error");
+    if (authError) {
+      flash(decodeURIComponent(authError));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   useEffect(() => {
@@ -249,6 +271,112 @@ export default function Home() {
     setSubtitle(GREETING);
     setInputOpen(true);
     flash(`好的，${name}。`);
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const supabase = getSupabaseBrowser();
+    if (!supabase) {
+      if (betaClosed) {
+        flash("内测期间需要账号登录，请稍后再试。");
+        return;
+      }
+      setLocalEntered(true);
+      return;
+    }
+    const email = authEmailDraft.trim();
+    const password = authPassword;
+    if (!email || !password) {
+      flash("填一下邮箱和密码。");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      const signIn = await supabase.auth.signInWithPassword({ email, password });
+      if (signIn.data.session) {
+        setAuthPassword("");
+        return;
+      }
+      flash(signIn.error?.message || "登录失败，请检查邮箱和密码。");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "进不去，稍后再试一次。");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleInviteSignup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const supabase = getSupabaseBrowser();
+    if (!supabase) {
+      flash("云端账号未配置，暂时无法注册。");
+      return;
+    }
+    const email = authEmailDraft.trim();
+    const password = authPassword;
+    const inviteCode = inviteCodeDraft.trim();
+    if (!email || !password || !inviteCode) {
+      flash("请填写邮箱、密码和邀请码。");
+      return;
+    }
+    if (password.length < 6) {
+      flash("密码至少 6 位。");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/beta/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, inviteCode })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        flash(data.error || "注册失败。");
+        return;
+      }
+      const signIn = await supabase.auth.signInWithPassword({ email, password });
+      if (signIn.data.session) {
+        setAuthPassword("");
+        setInviteCodeDraft("");
+        flash("欢迎进入 i阅。");
+        return;
+      }
+      flash("账号已创建，请用邮箱和密码登录。");
+      setAuthTab("login");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "注册失败，稍后再试。");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleApply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = authEmailDraft.trim();
+    if (!email) {
+      flash("请填写邮箱。");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      const response = await fetch("/api/beta/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, note: applyNoteDraft.trim() || undefined })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        flash(data.error || "提交失败。");
+        return;
+      }
+      setApplySubmitted(true);
+      flash("已收到你的申请，我们会通过邮箱联系你。");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "提交失败，稍后再试。");
+    } finally {
+      setAuthBusy(false);
+    }
   }
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -522,8 +650,9 @@ export default function Home() {
     }
   }
 
-  // ① 登录 / 注册（极简一屏）
+  // ① 登录 / 内测入口
   if (!entered) {
+    const showBetaGate = cloudEnabled && betaClosed;
     return (
       <main className="reader landing">
         <div className="outerHalo" />
@@ -531,12 +660,126 @@ export default function Home() {
         <section className="loginShell">
           <div className="loginIntro">
             <div className="bootBrand">i阅</div>
-            <h1>陪你读书</h1>
-            <p>你读纸质书，i阅 在文字里陪着。有想聊的随时发——我帮你记着，也会越来越懂你。</p>
+            <h1>{showBetaGate ? "内测邀请制" : "陪你读书"}</h1>
+            <p>
+              {showBetaGate
+                ? "i阅 正在内测中。有邀请码可直接注册；没有的话先登记邮箱，我们会联系你。"
+                : "你读纸质书，i阅 在文字里陪着。有想聊的随时发——我帮你记着，也会越来越懂你。"}
+            </p>
           </div>
-          <form className="loginForm" onSubmit={handleAuth}>
-            {cloudEnabled ? (
-              <>
+          {cloudEnabled ? (
+            showBetaGate ? (
+              <div className="loginForm betaGate">
+                <div className="authTabs">
+                  <button
+                    className={authTab === "invite" ? "active" : ""}
+                    onClick={() => setAuthTab("invite")}
+                    type="button"
+                  >
+                    邀请码注册
+                  </button>
+                  <button
+                    className={authTab === "apply" ? "active" : ""}
+                    onClick={() => setAuthTab("apply")}
+                    type="button"
+                  >
+                    申请内测
+                  </button>
+                  <button
+                    className={authTab === "login" ? "active" : ""}
+                    onClick={() => setAuthTab("login")}
+                    type="button"
+                  >
+                    已有账号
+                  </button>
+                </div>
+                {authTab === "invite" && (
+                  <form onSubmit={handleInviteSignup}>
+                    <label>邮箱</label>
+                    <input
+                      type="email"
+                      autoFocus
+                      value={authEmailDraft}
+                      onChange={(event) => setAuthEmailDraft(event.target.value)}
+                      placeholder="you@example.com"
+                    />
+                    <label>密码</label>
+                    <input
+                      type="password"
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                      placeholder="至少 6 位"
+                    />
+                    <label>邀请码</label>
+                    <input
+                      type="text"
+                      value={inviteCodeDraft}
+                      onChange={(event) => setInviteCodeDraft(event.target.value)}
+                      placeholder="向 i阅 团队索取"
+                    />
+                    <button type="submit" disabled={authBusy}>
+                      {authBusy ? "稍等…" : "注册并进入"}
+                    </button>
+                    <p className="loginHint">邀请码仅内测用户持有，请勿公开分享。</p>
+                  </form>
+                )}
+                {authTab === "apply" && (
+                  <form onSubmit={handleApply}>
+                    {applySubmitted ? (
+                      <p className="applySuccess">
+                        已收到你的申请。审核通过后，我们会把邀请码发到你的邮箱。
+                      </p>
+                    ) : (
+                      <>
+                        <label>邮箱</label>
+                        <input
+                          type="email"
+                          autoFocus
+                          value={authEmailDraft}
+                          onChange={(event) => setAuthEmailDraft(event.target.value)}
+                          placeholder="you@example.com"
+                        />
+                        <label>简单说说你为什么想试 i阅（可选）</label>
+                        <textarea
+                          rows={3}
+                          value={applyNoteDraft}
+                          onChange={(event) => setApplyNoteDraft(event.target.value)}
+                          placeholder="例如：平时读纸质书，希望有人陪着聊…"
+                        />
+                        <button type="submit" disabled={authBusy}>
+                          {authBusy ? "提交中…" : "提交申请"}
+                        </button>
+                        <p className="loginHint">我们会人工审核，通过后邮件发送邀请码。</p>
+                      </>
+                    )}
+                  </form>
+                )}
+                {authTab === "login" && (
+                  <form onSubmit={handleLogin}>
+                    <label>邮箱</label>
+                    <input
+                      type="email"
+                      autoFocus
+                      value={authEmailDraft}
+                      onChange={(event) => setAuthEmailDraft(event.target.value)}
+                      placeholder="you@example.com"
+                    />
+                    <label>密码</label>
+                    <input
+                      type="password"
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                      placeholder="你的密码"
+                    />
+                    <button type="submit" disabled={authBusy}>
+                      {authBusy ? "稍等…" : "登录"}
+                    </button>
+                    <p className="loginHint">内测期间，新用户需要邀请码才能注册。</p>
+                  </form>
+                )}
+              </div>
+            ) : (
+              <form className="loginForm" onSubmit={handleAuth}>
                 <label>邮箱</label>
                 <input
                   type="email"
@@ -559,14 +802,14 @@ export default function Home() {
                   {wechatEnabled ? "微信扫码登录" : "微信登录（即将开放）"}
                 </button>
                 <p className="loginHint">第一次来会自动建账号，老朋友直接进。</p>
-              </>
-            ) : (
-              <>
-                <p>当前未配置云端账户，可直接以本地模式体验（记忆只存在这台设备）。</p>
-                <button type="submit">进入阅读</button>
-              </>
-            )}
-          </form>
+              </form>
+            )
+          ) : (
+            <form className="loginForm" onSubmit={handleLogin}>
+              <p>当前未配置云端账户，可直接以本地模式体验（记忆只存在这台设备）。</p>
+              <button type="submit">进入阅读</button>
+            </form>
+          )}
         </section>
       </main>
     );

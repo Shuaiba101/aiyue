@@ -267,9 +267,61 @@ button {
   background: rgba(255, 220, 170, 0.14);
 }
 
-.loginForm p {
+.loginHint {
   margin: 16px 0 0;
   font-size: 12px;
+  color: rgba(255, 238, 215, 0.48);
+}
+
+.authTabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.authTabs button {
+  margin-top: 0;
+  padding: 10px 8px;
+  font-size: 13px;
+  background: rgba(255, 220, 170, 0.06);
+  color: rgba(255, 238, 215, 0.62);
+  border: 1px solid rgba(255, 220, 170, 0.1);
+}
+
+.authTabs button.active {
+  background: rgba(255, 200, 120, 0.16);
+  color: rgba(255, 245, 220, 0.95);
+  border-color: rgba(255, 200, 120, 0.28);
+}
+
+.loginForm textarea {
+  width: 100%;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 4px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 245, 220, 0.92);
+  font: inherit;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.applySuccess {
+  margin: 8px 0 0;
+  padding: 16px;
+  border-radius: 6px;
+  background: rgba(120, 200, 140, 0.08);
+  border: 1px solid rgba(120, 200, 140, 0.18);
+  color: rgba(210, 255, 220, 0.88);
+  line-height: 1.7;
+}
+
+.siteBetaNote {
+  margin-top: 18px;
+  font-size: 14px;
+  color: rgba(255, 238, 215, 0.52);
 }
 
 .voiceGrid {

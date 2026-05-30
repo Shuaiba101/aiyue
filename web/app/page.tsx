@@ -12,7 +12,7 @@ export default function HomePage() {
       </header>
 
       <section className="siteHero">
-        <p className="siteEyebrow">AI 阅读陪伴 · 有记忆</p>
+        <p className="siteEyebrow">AI 阅读陪伴 · 内测中</p>
         <h1>陪你读书</h1>
         <p className="siteLead">
           你读纸质书，书在你手里。i阅 在文字里陪着——有触动、有疑问、随便什么想聊的，发给它就行。
@@ -20,9 +20,10 @@ export default function HomePage() {
         </p>
         <div className="siteActions">
           <Link className="sitePrimary" href="/read">
-            开始阅读
+            内测入口
           </Link>
         </div>
+        <p className="siteBetaNote">当前为邀请制内测，需要邀请码或先申请资格。</p>
       </section>
 
       <section className="siteFeatures">
