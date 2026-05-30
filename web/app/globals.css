@@ -184,6 +184,29 @@ button {
   gap: 20px;
 }
 
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signOutBtn {
+  padding: 8px 13px;
+  border: 1px solid rgba(255, 220, 170, 0.12);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 240, 215, 0.52);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.signOutBtn:hover {
+  color: rgba(255, 240, 215, 0.82);
+  border-color: rgba(255, 220, 170, 0.22);
+}
+
 .loginShell {
   position: relative;
   z-index: 8;
@@ -615,34 +638,11 @@ button {
   display: block;
 }
 
-.inputRow {
-  display: grid;
-  grid-template-columns: 1fr 44px;
-  gap: 8px;
-  align-items: end;
-}
-
 .inputDock input {
+  width: 100%;
   border-radius: 12px 12px 0 0;
   background: rgba(0, 0, 0, 0.28);
   font-size: 17px;
-}
-
-.inputRow button {
-  min-width: 44px;
-  height: 42px;
-  border: 1px solid rgba(255, 220, 170, 0.18);
-  border-radius: 999px;
-  background: rgba(255, 220, 170, 0.07);
-  color: rgba(255, 244, 224, 0.86);
-  cursor: pointer;
-}
-
-.inputRow button:hover,
-.inputRow button.listening {
-  border-color: rgba(143, 214, 185, 0.38);
-  background: rgba(143, 214, 185, 0.12);
-  color: rgba(230, 255, 244, 0.94);
 }
 
 .readingBoard {

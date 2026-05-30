@@ -28,7 +28,7 @@ import {
 import type { ChatMessage, Memory, ModeKey } from "@/lib/core";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { loadMemory, saveMemory } from "@/lib/memory-store";
+import { loadMemory, saveMemory, clearLocalMemory } from "@/lib/memory-store";
 
 type UserSession = {
   name: string;
@@ -38,17 +38,6 @@ type UserSession = {
   userApiKey: string;
 };
 type AuthTab = "invite" | "apply" | "login";
-type BrowserSpeechRecognition = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onstart: (() => void) | null;
-  onresult: ((event: { results?: { [index: number]: { [index: number]: { transcript?: string } } } }) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-};
-type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 const SESSION_KEY = "iyue_web_session_v1";
 const FREE_TRIAL_TURNS = 30;
@@ -74,7 +63,6 @@ export default function Home() {
   const [messageDraft, setMessageDraft] = useState("");
   const [modal, setModal] = useState<"memory" | "account" | "paywall" | null>(null);
   const [toast, setToast] = useState("");
-  const [isListening, setIsListening] = useState(false);
 
   // 认证（Supabase 邮箱+密码）
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -391,6 +379,7 @@ export default function Home() {
   async function signOut() {
     const supabase = getSupabaseBrowser();
     if (supabase) await supabase.auth.signOut();
+    clearLocalMemory();
     setAuthUserId(null);
     setAuthEmail("");
     setSession(null);
@@ -398,7 +387,12 @@ export default function Home() {
     setBook("");
     setMessages([]);
     setModal(null);
-    flash("已退出。");
+    setMemory(defaultMemory());
+    setMemoryReady(false);
+    setSubtitle(GREETING);
+    setIsThinking(false);
+    setInputOpen(false);
+    flash("已退出登录。");
   }
 
   // 文字送达：思考结束后逐字显示 i阅 的回复。
@@ -595,37 +589,6 @@ export default function Home() {
   async function sendMessage(event?: FormEvent) {
     event?.preventDefault();
     await submitUserText(messageDraft);
-  }
-
-  function startDictation() {
-    const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: BrowserSpeechRecognitionConstructor }).SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor }).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      flash("当前浏览器不支持语音输入，可以用输入法语音。");
-      setInputOpen(true);
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onstart = () => {
-      setIsListening(true);
-      setInputOpen(true);
-    };
-    recognition.onresult = (event) => {
-      const text = event.results?.[0]?.[0]?.transcript || "";
-      if (!text) return;
-      setMessageDraft(text);
-      void submitUserText(text);
-    };
-    recognition.onerror = () => {
-      setIsListening(false);
-      flash("语音输入失败，再试一次。");
-    };
-    recognition.onend = () => setIsListening(false);
-    recognition.start();
   }
 
   function saveAccount(event: FormEvent<HTMLFormElement>) {
@@ -853,9 +816,14 @@ export default function Home() {
 
       <nav className="topbar">
         <div className="brandMark">i阅</div>
-        <button className="quotaPill" onClick={() => setModal("account")} type="button">
-          {session.userApiKey ? "自带 API" : session.plan === "pro" ? "套餐用户" : `免费 ${session.trialRemaining}/${FREE_TRIAL_TURNS}`}
-        </button>
+        <div className="topbarActions">
+          <button className="quotaPill" onClick={() => setModal("account")} type="button">
+            {session.userApiKey ? "自带 API" : session.plan === "pro" ? "套餐用户" : `免费 ${session.trialRemaining}/${FREE_TRIAL_TURNS}`}
+          </button>
+          <button className="signOutBtn" onClick={() => void signOut()} type="button">
+            退出
+          </button>
+        </div>
       </nav>
 
       <section className={`subtitle ${!book && !isThinking ? "inviteText" : ""}`} aria-live="polite">{subtitle}</section>
@@ -875,17 +843,12 @@ export default function Home() {
       <section className={`inputDock ${inputOpen ? "open" : ""}`} onClick={() => setInputOpen(true)}>
         <div className="inputLine" />
         <form onSubmit={sendMessage}>
-          <div className="inputRow">
-            <input
-              ref={inputRef}
-              value={messageDraft}
-              onChange={(event) => setMessageDraft(event.target.value)}
-              placeholder={book ? "触动、疑问、摘抄、随便什么想聊的…" : "今天想读什么书？"}
-            />
-            <button className={isListening ? "listening" : ""} onClick={startDictation} type="button">
-              {isListening ? "听" : "说"}
-            </button>
-          </div>
+          <input
+            ref={inputRef}
+            value={messageDraft}
+            onChange={(event) => setMessageDraft(event.target.value)}
+            placeholder={book ? "触动、疑问、摘抄、随便什么想聊的…" : "今天想读什么书？"}
+          />
         </form>
       </section>
 
@@ -944,7 +907,7 @@ export default function Home() {
                 <strong>{cloudEnabled ? (authEmail || "已登录") : "本地模式"}</strong>
                 <span>{cloudEnabled ? "记忆已跨设备保存" : "记忆只存在这台设备"}</span>
               </div>
-              <button onClick={signOut} type="button">退出</button>
+              <button onClick={() => void signOut()} type="button">退出登录</button>
             </div>
             <div className="planStrip">
               <div>

@@ -24,6 +24,14 @@ function writeLocal(memory: Memory) {
   }
 }
 
+export function clearLocalMemory() {
+  try {
+    localStorage.removeItem(LOCAL_KEY);
+  } catch {
+    // 忽略。
+  }
+}
+
 // 一份本地记忆是否“有内容”，用来决定首次登录要不要迁移上云。
 function hasContent(memory: Memory): boolean {
   return (
