@@ -82,7 +82,8 @@ export default function Home() {
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [betaClosed, setBetaClosed] = useState(false);
-  const [authTab, setAuthTab] = useState<AuthTab>("invite");
+  const [betaReady, setBetaReady] = useState(false);
+  const [authTab, setAuthTab] = useState<AuthTab>("apply");
   const [inviteCodeDraft, setInviteCodeDraft] = useState("");
   const [applyNoteDraft, setApplyNoteDraft] = useState("");
   const [applySubmitted, setApplySubmitted] = useState(false);
@@ -124,7 +125,8 @@ export default function Home() {
     fetch("/api/beta/status")
       .then((res) => res.json())
       .then((data) => setBetaClosed(Boolean(data.closed)))
-      .catch(() => setBetaClosed(false));
+      .catch(() => setBetaClosed(false))
+      .finally(() => setBetaReady(true));
   }, []);
 
   useEffect(() => {
@@ -711,6 +713,8 @@ export default function Home() {
   // ① 登录 / 内测入口
   if (!entered) {
     const showBetaGate = cloudEnabled && betaClosed;
+    const authLoading = cloudEnabled && !betaReady;
+
     return (
       <main className="reader landing">
         <div className="outerHalo" />
@@ -725,7 +729,11 @@ export default function Home() {
                 : "你读纸质书，i阅 在文字里陪着。有想聊的随时发——我帮你记着，也会越来越懂你。"}
             </p>
           </div>
-          {cloudEnabled ? (
+          {authLoading ? (
+            <div className="loginForm authLoading">
+              <p>稍等，正在加载…</p>
+            </div>
+          ) : cloudEnabled ? (
             showBetaGate ? (
               <div className="loginForm betaGate">
                 <div className="authTabs">
@@ -869,6 +877,7 @@ export default function Home() {
             </form>
           )}
         </section>
+        {toast && <div className="toast loginToast">{toast}</div>}
       </main>
     );
   }
@@ -965,6 +974,7 @@ export default function Home() {
             <button type="submit">{onboardStep < 3 ? "下一步" : "开始阅读"}</button>
           </form>
         </section>
+        {toast && <div className="toast loginToast">{toast}</div>}
       </main>
     );
   }
