@@ -12,6 +12,7 @@ import {
   buildMemoryTimeline,
   buildTurnCompanionPrompt,
   buildWelcomeBackHint,
+  resolveBookEntryIntent,
   commitTurn,
   defaultMemory,
   detectReplyStance,
@@ -30,7 +31,18 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadMemory, saveMemory, clearLocalMemory } from "@/lib/memory-store";
 import { FREE_TRIAL_TURNS, type QuotaPlan } from "@/lib/quota/constants";
-import { speakText, stopSpeaking } from "@/lib/tts-client";
+import {
+  loadSpeechAudio,
+  playSpeechAudio,
+  audioFromDataUrl,
+  stopSpeaking,
+  unlockAudioPlayback,
+  textRevealIntervalMs,
+  msPerCharForDuration,
+  estimateSpeechDuration,
+  mobilePlaybackHint,
+  prefersMobileLayout
+} from "@/lib/tts-client";
 import { sanitizeAssistantReply } from "@/lib/core";
 import { readJsonResponse } from "@/lib/read-json-response";
 
@@ -245,11 +257,12 @@ export default function Home() {
     flash("试读额度已用完。");
   }
 
-  // 打字机：固定节奏（无语音时）
-  function revealText(full: string) {
+  // 打字机：固定节奏
+  function revealText(full: string, msPerChar?: number) {
     if (revealRef.current) clearInterval(revealRef.current);
     setSubtitle("");
     if (!full) return;
+    const interval = msPerChar ?? textRevealIntervalMs();
     let index = 0;
     revealRef.current = setInterval(() => {
       index += 1;
@@ -258,25 +271,29 @@ export default function Home() {
         if (revealRef.current) clearInterval(revealRef.current);
         revealRef.current = null;
       }
-    }, 42);
+    }, interval);
   }
 
-  // 打字机：按语音时长同步（与 MiMo 同时开始）
-  function revealTextSynced(full: string, durationMs: number) {
+  /** 字幕与语音时长对齐 */
+  function revealTextSynced(full: string, durationMs: number, token: number) {
     if (revealRef.current) clearInterval(revealRef.current);
     setSubtitle("");
-    if (!full) return;
-    const chars = full.length;
-    const intervalMs = Math.max(20, Math.min(72, durationMs / chars));
+    if (!full || token !== speakTokenRef.current) return;
+    const interval = msPerCharForDuration(full.length, durationMs);
     let index = 0;
     revealRef.current = setInterval(() => {
+      if (token !== speakTokenRef.current) {
+        if (revealRef.current) clearInterval(revealRef.current);
+        revealRef.current = null;
+        return;
+      }
       index += 1;
       setSubtitle(full.slice(0, index));
-      if (index >= chars) {
+      if (index >= full.length) {
         if (revealRef.current) clearInterval(revealRef.current);
         revealRef.current = null;
       }
-    }, intervalMs);
+    }, interval);
   }
 
   useEffect(() => () => {
@@ -476,32 +493,37 @@ export default function Home() {
     flash("已退出登录。");
   }
 
-  // 文字 + 语音：有 TTS 时等音频就绪后同步开始；否则仅打字机。
-  function deliver(text: string) {
+  // 语音开启时：等音频就绪后与朗读同步出字；服务端预生成音频可大幅缩短等待。
+  function deliver(text: string, prefetchedAudio?: string) {
     setIsThinking(false);
     const clean = sanitizeAssistantReply(text);
     const useTts = session?.ttsEnabled !== false && Boolean(clean);
+    const token = ++speakTokenRef.current;
 
     if (!useTts) {
       revealText(clean);
       return;
     }
 
-    const token = ++speakTokenRef.current;
-    if (revealRef.current) clearInterval(revealRef.current);
-    setSubtitle("");
-
     void (async () => {
-      let syncDurationMs = 0;
-      const ok = await speakText({
-        text: clean,
-        onReady: (durationMs) => {
-          if (token !== speakTokenRef.current) return;
-          syncDurationMs = durationMs;
-        },
+      const audio = prefetchedAudio
+        ? await audioFromDataUrl(prefetchedAudio)
+        : await loadSpeechAudio({ text: clean });
+      if (token !== speakTokenRef.current) return;
+
+      if (!audio) {
+        revealText(clean);
+        if (prefersMobileLayout()) flash(mobilePlaybackHint());
+        return;
+      }
+
+      const durationMs =
+        audio.duration > 0 ? audio.duration * 1000 : estimateSpeechDuration(clean.length) * 1000;
+
+      const ok = await playSpeechAudio(audio, {
         onStart: () => {
           if (token !== speakTokenRef.current) return;
-          revealTextSynced(clean, syncDurationMs);
+          revealTextSynced(clean, durationMs, token);
           setIsSpeaking(true);
         },
         onEnd: () => {
@@ -510,8 +532,13 @@ export default function Home() {
           setSubtitle(clean);
         }
       });
+
       if (token !== speakTokenRef.current) return;
-      if (!ok) revealText(clean);
+      if (!ok) {
+        revealText(clean);
+        setIsSpeaking(false);
+        if (prefersMobileLayout()) flash(mobilePlaybackHint());
+      }
     })();
   }
 
@@ -616,7 +643,8 @@ export default function Home() {
             phase: returning ? "reading" : "opening",
             stance: "deepen",
             searchUsed: false
-          })
+          }),
+          wantTts: session?.ttsEnabled !== false
         })
       });
       const data = await readJsonResponse(response);
@@ -628,21 +656,72 @@ export default function Home() {
       if (data.quota && typeof data.quota === "object") applyQuotaFromServer(pickQuotaFields(data.quota as Record<string, unknown>));
       setMessages([{ role: "assistant", content: greeting }]);
       persistGreeting(title, greeting);
-      void deliver(greeting);
+      void deliver(greeting, typeof data.audio === "string" ? data.audio : undefined);
     } catch {
       setMessages([{ role: "assistant", content: fallback }]);
       persistGreeting(title, fallback);
-      void deliver(fallback);
+      void deliver(fallback, undefined);
     }
+  }
+
+  async function handleBookEntry(text: string) {
+    const welcomeHint = buildWelcomeBackHint(memory);
+    let intent = resolveBookEntryIntent(text, memory);
+
+    if (intent.action === "unclear" && intent.lastBook) {
+      const fallbackBook = intent.lastBook;
+      try {
+        const response = await fetch("/api/classify-entry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            lastBook: fallbackBook,
+            welcomeHint: welcomeHint || undefined
+          })
+        });
+        const data = await readJsonResponse(response);
+        if (data.intent === "continue" && typeof data.book === "string") {
+          intent = { action: "continue", book: data.book };
+        } else if (data.intent === "new_book_pending") {
+          intent = { action: "prompt_new" };
+        } else if (data.intent === "title" && typeof data.book === "string" && data.book) {
+          intent = { action: "open", book: data.book };
+        } else if (typeof data.book === "string" && data.book) {
+          intent = { action: "continue", book: data.book };
+        }
+      } catch {
+        intent = { action: "continue", book: fallbackBook };
+      }
+    }
+
+    if (intent.action === "continue") {
+      flash(`好，接着读《${intent.book}》。`);
+      await openWithBook(intent.book);
+      return;
+    }
+    if (intent.action === "open") {
+      await openWithBook(intent.book);
+      return;
+    }
+    if (intent.action === "prompt_new") {
+      setSubtitle("好，换一本。输入书名就可以开始。");
+      setInputOpen(true);
+      return;
+    }
+    if (intent.action === "none") return;
+
+    await openWithBook(text);
   }
 
   async function submitUserText(rawText: string) {
     const text = rawText.trim();
     if (!text || !session) return;
+    unlockAudioPlayback();
 
-    // 还没选书 → 第一句话就是书名，进入阅读现场。
+    // 还没选书 → 先理解意图（继续上一本 / 换书 / 报书名），再进入阅读。
     if (!book) {
-      await openWithBook(text);
+      await handleBookEntry(text);
       return;
     }
 
@@ -680,7 +759,8 @@ export default function Home() {
           messages: nextMessages.slice(-10),
           userApiKey: session.userApiKey || undefined,
           systemPrompt: buildSystemPrompt(memory, book, mode),
-          turnCompanionPrompt
+          turnCompanionPrompt,
+          wantTts: session.ttsEnabled !== false
         })
       });
       const data = await readJsonResponse(response);
@@ -699,7 +779,7 @@ export default function Home() {
       const assistantMessage: ChatMessage = { role: "assistant", content: reply };
       const completed = [...nextMessages, assistantMessage];
       setMessages(completed);
-      void deliver(reply);
+      void deliver(reply, typeof data.audio === "string" ? data.audio : undefined);
       commitAndSave(text, reply, completed);
       if (data.usedSearch) flash("查了一点资料。");
       if (phase === "reflecting") flash("帮你把和这本书的轨迹记下了。");
@@ -983,27 +1063,52 @@ export default function Home() {
         </div>
       )}
       <div className="bottomHint">
-        {isSpeaking
-          ? "i阅 在说话…"
-          : isThinking
-            ? "i阅 在想…"
-            : session.ttsEnabled === false
-              ? "文字模式 · 语音已关闭"
-              : !book
-                ? "输入书名，按 Enter 开始"
-                : "书在你手里 · 有想聊的随时发"}
+        {isSpeaking ? (
+          "i阅 在说话…"
+        ) : isThinking ? (
+          "i阅 在想…"
+        ) : session.ttsEnabled === false ? (
+          "文字模式 · 语音已关闭"
+        ) : !book ? (
+          <>
+            <span className="hintDesktop">输入书名，按 Enter 开始</span>
+            <span className="hintMobile">轻触下方，输入书名</span>
+          </>
+        ) : (
+          <>
+            <span className="hintDesktop">书在你手里 · 有想聊的随时发</span>
+            <span className="hintMobile">轻触下方 · 聊点什么</span>
+          </>
+        )}
       </div>
 
       {!book && !isThinking && <div className="breathCue" aria-hidden="true" />}
 
-      <section className={`inputDock ${inputOpen ? "open" : ""}`} onClick={() => setInputOpen(true)}>
+      <section
+        className={`inputDock ${inputOpen ? "open" : ""}`}
+        onClick={() => {
+          unlockAudioPlayback();
+          setInputOpen(true);
+        }}
+        onTouchStart={() => unlockAudioPlayback()}
+        role="button"
+        tabIndex={-1}
+        aria-label="打开输入框"
+      >
         <div className="inputLine" />
-        <form onSubmit={sendMessage}>
+        <form
+          onSubmit={sendMessage}
+          onClick={(event) => event.stopPropagation()}
+        >
           <input
             ref={inputRef}
             value={messageDraft}
             onChange={(event) => setMessageDraft(event.target.value)}
+            onFocus={() => unlockAudioPlayback()}
             placeholder={book ? "触动、疑问、摘抄、随便什么想聊的…" : "今天想读什么书？"}
+            enterKeyHint={book ? "send" : "done"}
+            autoComplete="off"
+            autoCorrect="off"
           />
         </form>
       </section>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getAuthUser } from "@/lib/auth/server";
 import { demoReply, sanitizeAssistantReply } from "@/lib/core";
+import { synthesizeMimoSpeech } from "@/lib/mimo-tts";
 import { checkPlatformAccess, consumePlatformTurn } from "@/lib/quota/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -16,7 +17,8 @@ const requestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string()
-  })).min(1)
+  })).min(1),
+  wantTts: z.boolean().default(false)
 });
 
 async function tavilySearch(book: string, query: string) {
@@ -135,7 +137,12 @@ export async function POST(request: Request) {
     quota = consumed.quota;
   }
 
-  return Response.json({ reply, usedSearch: Boolean(searchContext), quota });
+  let audio: string | undefined;
+  if (input.wantTts && process.env.MIMO_API_KEY && reply) {
+    audio = (await synthesizeMimoSpeech(reply)) || undefined;
+  }
+
+  return Response.json({ reply, usedSearch: Boolean(searchContext), quota, audio });
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知错误";
     console.error("[api/chat]", message);

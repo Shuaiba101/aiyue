@@ -15,10 +15,13 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  min-height: 100dvh;
   background: #000;
   color: var(--warm);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 button,
@@ -39,9 +42,19 @@ button {
   position: fixed;
   inset: 0;
   overflow: hidden;
+  height: 100dvh;
   background:
     radial-gradient(circle at 50% 46%, rgba(70, 38, 16, 0.22), transparent 48%),
     #000;
+}
+
+.reader.landing {
+  position: relative;
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .outerHalo,
@@ -605,6 +618,17 @@ button {
   color: rgba(255, 238, 215, 0.42);
   font-size: 13px;
   font-weight: 300;
+  text-align: center;
+  padding: 0 16px;
+  max-width: 92vw;
+}
+
+.hintDesktop {
+  display: inline;
+}
+
+.hintMobile {
+  display: none;
 }
 
 .inputDock {
@@ -613,6 +637,11 @@ button {
   bottom: 7.5%;
   z-index: 12;
   width: 300px;
+  cursor: text;
+}
+
+.inputDock:not(.open) .inputLine {
+  cursor: pointer;
 }
 
 .inputLine {
@@ -978,14 +1007,43 @@ button {
 }
 
 @media (max-width: 760px) {
+  .hintDesktop {
+    display: none;
+  }
+
+  .hintMobile {
+    display: inline;
+  }
+
   .topbar {
-    left: 18px;
-    right: 18px;
-    align-items: flex-start;
+    left: max(14px, env(safe-area-inset-left));
+    right: max(14px, env(safe-area-inset-right));
+    top: max(10px, env(safe-area-inset-top));
+    align-items: center;
+    gap: 10px;
   }
 
   .brandMark {
-    display: none;
+    display: block;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+  }
+
+  .topbarActions {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+
+  .quotaPill {
+    position: static;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .signOutBtn {
+    padding: 8px 10px;
+    font-size: 12px;
   }
 
   .modeTabs {
@@ -993,29 +1051,56 @@ button {
     justify-content: space-between;
   }
 
-  .quotaPill {
-    position: absolute;
-    right: 0;
-    top: 48px;
-  }
-
   .loginShell {
     grid-template-columns: 1fr;
-    gap: 28px;
+    gap: 24px;
+    width: min(980px, calc(100vw - 28px));
+    padding: max(8px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom));
   }
 
   .loginIntro h1 {
-    font-size: 38px;
+    font-size: clamp(28px, 8vw, 38px);
+  }
+
+  .loginIntro p {
+    font-size: 15px;
+  }
+
+  .loginForm {
+    padding: 20px 18px;
+  }
+
+  .loginForm input,
+  .loginForm textarea,
+  .inputDock input,
+  .panel input {
+    font-size: 16px;
+  }
+
+  .authTabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .authTabs button {
+    padding: 10px 4px;
+    font-size: 11px;
+    line-height: 1.3;
   }
 
   .priceGrid,
-  .planStrip,
   .voiceGrid.compact {
     grid-template-columns: 1fr;
   }
 
   .planStrip {
     display: grid;
+    gap: 12px;
+  }
+
+  .planStrip button {
+    width: 100%;
+    text-align: center;
   }
 
   .modeTabs button {
@@ -1023,18 +1108,111 @@ button {
     font-size: 13px;
   }
 
+  .outerHalo {
+    width: 88vw;
+    height: 88vw;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .glowCore {
+    width: 58vw;
+    height: 58vw;
+    min-width: 0;
+    min-height: 0;
+  }
+
   .subtitle {
-    left: 7%;
-    width: 86vw;
+    left: 50%;
+    top: 46%;
+    width: min(92vw, 520px);
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-size: clamp(17px, 4.6vw, 22px);
+    line-height: 1.75;
+    padding: 0 4px;
+  }
+
+  .thinkingDots {
+    top: 46%;
+  }
+
+  .bottomHint {
+    bottom: max(96px, calc(72px + env(safe-area-inset-bottom)));
+    font-size: 12px;
   }
 
   .inputDock {
-    left: 7%;
-    width: 86vw;
+    left: 50%;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(92vw, 480px);
+    transform: translateX(-50%);
+    padding: 8px 0;
+  }
+
+  .inputDock:not(.open) {
+    min-height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .inputLine {
+    width: 100px;
   }
 
   .inputDock.open .inputLine {
     width: 100%;
+  }
+
+  .inputDock input {
+    font-size: 16px;
+    padding: 14px 12px;
+  }
+
+  .cornerActions {
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(108px, calc(84px + env(safe-area-inset-bottom)));
+    gap: 8px;
+  }
+
+  .cornerActions button {
+    width: 44px;
+    height: 44px;
+    opacity: 0.42;
+    font-size: 18px;
+  }
+
+  .toast {
+    top: max(12px, calc(env(safe-area-inset-top) + 8px));
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    transform: none;
+    max-width: none;
+    border-radius: 12px;
+    text-align: center;
+  }
+
+  .modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .panel {
+    width: 100%;
+    max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top)));
+    border-radius: 16px 16px 0 0;
+    padding: 22px max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  }
+
+  .accountPanel,
+  .paywallPanel {
+    width: 100%;
+  }
+
+  .switchRow {
+    align-items: flex-start;
   }
 
   .readingBoard,
@@ -1042,8 +1220,47 @@ button {
     display: none;
   }
 
-  .bottomHint {
-    width: 86vw;
+  .breathCue {
+    top: 52%;
+  }
+
+  .bootBrand {
+    margin-bottom: 36px;
+    font-size: 28px;
+  }
+
+  .siteNav,
+  .siteHero,
+  .siteScene,
+  .siteTrace,
+  .sitePrinciples,
+  .siteBeta,
+  .siteFooter {
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+
+  .siteNav {
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+
+  .siteHero h1 {
+    letter-spacing: 0.04em;
+    font-size: clamp(36px, 10vw, 56px);
+  }
+
+  .siteLead {
+    font-size: 15px;
+  }
+
+  .siteLineAi {
+    padding-left: 12px;
+  }
+
+  .siteFooter {
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
     text-align: center;
   }
 }
@@ -1410,14 +1627,4 @@ button {
 
 .siteFooter a:hover {
   color: rgba(255, 240, 215, 0.65);
-}
-
-@media (max-width: 760px) {
-  .siteHero h1 {
-    letter-spacing: 0.04em;
-  }
-
-  .siteLineAi {
-    padding-left: 12px;
-  }
 }

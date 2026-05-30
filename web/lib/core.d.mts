@@ -92,6 +92,15 @@ export function ensureReaderReady(memory: Memory, email?: string): Memory;
 export function hasBookHistory(memory: Memory, book: string): boolean;
 export function buildBookRecallContext(memory: Memory, book: string): string;
 export function buildWelcomeBackHint(memory: Memory, now?: number): string;
+export function resolveBookEntryIntent(
+  text: string,
+  memory: Memory
+):
+  | { action: "none" }
+  | { action: "continue"; book: string }
+  | { action: "open"; book: string }
+  | { action: "prompt_new" }
+  | { action: "unclear"; lastBook: string; raw: string };
 export function buildNewBookGreetingUserMessage(memory: Memory, book: string): string;
 export function buildReturnGreetingUserMessage(memory: Memory, book: string): string;
 export function fallbackReturnGreeting(memory: Memory, book: string): string;

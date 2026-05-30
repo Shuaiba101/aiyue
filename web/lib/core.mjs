@@ -341,6 +341,72 @@ export function buildBookRecallContext(memory, book) {
   return parts.join("\n");
 }
 
+/** 像对话回复（继续/换书），不像一本书名。 */
+function looksLikeConversationalReply(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return false;
+  if (/[，。！？、；：]/.test(clean)) return true;
+  if (/(我已经|我是说|不是说|继续读|接着读|读过|读过了|一遍|还是|不要|可以吗|对吧|这本|那本|换一)/.test(clean)) return true;
+  return clean.length > 16;
+}
+
+function isContinueReadingReply(text) {
+  return /继续|接着读|接着聊|接着看|还是这本|就这本|同一本|那本吧|这本吧|老样子|不要换|不换书|读过了|读过一遍|已经读过|之前那本|上次那本|就读这|就读本|读啊|读吧|还是读|就继续/i.test(
+    String(text || "")
+  );
+}
+
+function isSwitchBookReply(text) {
+  return /换一本|换本书|读别的|另一本|不想读这|不读这|换个书/i.test(String(text || ""));
+}
+
+/**
+ * 选书页：判断用户是在说「继续上一本 / 换书 / 直接报书名」。
+ * action: continue | open | prompt_new | unclear
+ */
+export function resolveBookEntryIntent(text, memory) {
+  const clean = String(text || "").trim();
+  if (!clean) return { action: "none" };
+
+  const m = normalizeMemory(memory);
+  const lastConv = m.conversations.length ? m.conversations[m.conversations.length - 1] : null;
+  const lastBook = lastConv?.book || m.reader_profile.reading_history.at(-1) || "";
+
+  const quoted = clean.match(/[《「『]([^》」』]+)[》」』]/);
+  if (quoted) return { action: "open", book: quoted[1].trim() };
+
+  if (isSwitchBookReply(clean) && !isContinueReadingReply(clean)) {
+    return { action: "prompt_new" };
+  }
+
+  if (lastBook && isContinueReadingReply(clean)) {
+    return { action: "continue", book: lastBook };
+  }
+
+  if (lastBook && clean.length <= 10 && /^(是|好|对|嗯|行|可以|要|继续)/.test(clean)) {
+    return { action: "continue", book: lastBook };
+  }
+
+  if (lastBook && looksLikeConversationalReply(clean)) {
+    return { action: "continue", book: lastBook };
+  }
+
+  for (const title of [...m.reader_profile.reading_history].reverse()) {
+    if (title && clean.includes(title)) return { action: "open", book: title };
+  }
+
+  if (looksLikeConversationalReply(clean) && lastBook) {
+    return { action: "unclear", lastBook, raw: clean };
+  }
+
+  if (clean.length <= 30 && !looksLikeConversationalReply(clean)) {
+    return { action: "open", book: clean };
+  }
+
+  if (lastBook) return { action: "unclear", lastBook, raw: clean };
+  return { action: "open", book: clean };
+}
+
 /** 进入选书页时的牵挂提示（有近期记录才返回）。 */
 export function buildWelcomeBackHint(memory, now = Date.now()) {
   const m = normalizeMemory(memory);
