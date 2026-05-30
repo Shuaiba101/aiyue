@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { getAuthUser } from "@/lib/auth/server";
 import { demoReply, sanitizeAssistantReply } from "@/lib/core";
-import { synthesizeMimoSpeech } from "@/lib/mimo-tts";
 import { checkPlatformAccess, consumePlatformTurn } from "@/lib/quota/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   book: z.string().min(1),
@@ -17,8 +17,7 @@ const requestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string()
-  })).min(1),
-  wantTts: z.boolean().default(false)
+  })).min(1)
 });
 
 async function tavilySearch(book: string, query: string) {
@@ -115,7 +114,7 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: "deepseek-reasoner",
+      model: "deepseek-chat",
       messages,
       temperature: 0.7,
       max_tokens: 900
@@ -137,17 +136,7 @@ export async function POST(request: Request) {
     quota = consumed.quota;
   }
 
-  let audio: string | undefined;
-  if (input.wantTts && process.env.MIMO_API_KEY && reply) {
-    try {
-      audio = (await synthesizeMimoSpeech(reply)) || undefined;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "未知错误";
-      console.warn("[api/chat] TTS 失败，仍返回文字：", message);
-    }
-  }
-
-  return Response.json({ reply, usedSearch: Boolean(searchContext), quota, audio });
+  return Response.json({ reply, usedSearch: Boolean(searchContext), quota });
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知错误";
     console.error("[api/chat]", message);

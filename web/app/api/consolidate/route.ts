@@ -4,6 +4,7 @@ import { checkPlatformAccess } from "@/lib/quota/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   userApiKey: z.string().optional(),
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: "deepseek-reasoner",
+      model: "deepseek-chat",
       messages: parsed.data.messages,
       temperature: 0.4,
       max_tokens: 700

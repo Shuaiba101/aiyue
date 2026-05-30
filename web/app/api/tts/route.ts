@@ -3,6 +3,7 @@ import { sanitizeAssistantReply } from "@/lib/core";
 import { TTS_DEFAULT_VOICE, TTS_READING_STYLE, synthesizeMimoSpeech } from "@/lib/mimo-tts";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   text: z.string().min(1).max(1000),

@@ -34,7 +34,6 @@ import { FREE_TRIAL_TURNS, type QuotaPlan } from "@/lib/quota/constants";
 import {
   loadSpeechAudio,
   playSpeechAudio,
-  audioFromDataUrl,
   stopSpeaking,
   unlockAudioPlayback,
   textRevealIntervalMs,
@@ -502,8 +501,8 @@ export default function Home() {
     flash("已退出登录。");
   }
 
-  // 语音开启时：等音频就绪后与朗读同步出字；服务端预生成音频可大幅缩短等待。
-  function deliver(text: string, prefetchedAudio?: string) {
+  // 语音开启时：等 /api/tts 音频就绪后与朗读同步出字。
+  function deliver(text: string) {
     setIsThinking(false);
     const clean = sanitizeAssistantReply(text);
     const useTts = session?.ttsEnabled !== false && Boolean(clean);
@@ -515,9 +514,7 @@ export default function Home() {
     }
 
     void (async () => {
-      const audio = prefetchedAudio
-        ? await audioFromDataUrl(prefetchedAudio)
-        : await loadSpeechAudio({ text: clean });
+      const audio = await loadSpeechAudio({ text: clean });
       if (token !== speakTokenRef.current) return;
 
       if (!audio) {
@@ -652,8 +649,7 @@ export default function Home() {
             phase: returning ? "reading" : "opening",
             stance: "deepen",
             searchUsed: false
-          }),
-          wantTts: session?.ttsEnabled !== false
+          })
         })
       });
       const data = await readJsonResponse(response);
@@ -665,11 +661,11 @@ export default function Home() {
       if (data.quota && typeof data.quota === "object") applyQuotaFromServer(pickQuotaFields(data.quota as Record<string, unknown>));
       setMessages([{ role: "assistant", content: greeting }]);
       persistGreeting(title, greeting);
-      void deliver(greeting, typeof data.audio === "string" ? data.audio : undefined);
+      void deliver(greeting);
     } catch {
       setMessages([{ role: "assistant", content: fallback }]);
       persistGreeting(title, fallback);
-      void deliver(fallback, undefined);
+      void deliver(fallback);
     }
   }
 
@@ -768,8 +764,7 @@ export default function Home() {
           messages: nextMessages.slice(-10),
           userApiKey: session.userApiKey || undefined,
           systemPrompt: buildSystemPrompt(memory, book, mode),
-          turnCompanionPrompt,
-          wantTts: session.ttsEnabled !== false
+          turnCompanionPrompt
         })
       });
       const data = await readJsonResponse(response);
@@ -788,13 +783,16 @@ export default function Home() {
       const assistantMessage: ChatMessage = { role: "assistant", content: reply };
       const completed = [...nextMessages, assistantMessage];
       setMessages(completed);
-      void deliver(reply, typeof data.audio === "string" ? data.audio : undefined);
+      void deliver(reply);
       commitAndSave(text, reply, completed);
       if (data.usedSearch) flash("查了一点资料。");
       if (phase === "reflecting") flash("帮你把和这本书的轨迹记下了。");
       if (data.demo) flash("演示回应：配置 DeepSeek Key 后会变成真实 AI。");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "请求失败";
+      const raw = error instanceof Error ? error.message : "请求失败";
+      const message = /failed|closed|network|abort/i.test(raw)
+        ? "连接中断，可能请求超时，请稍后再试"
+        : raw;
       setIsThinking(false);
       setSubtitle(`这里卡住了：${message}`);
       flash(message);
