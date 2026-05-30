@@ -70,6 +70,21 @@ export function compactText(text: string, max?: number): string;
 export function extractNodeName(text: string): string;
 export function classifyNote(text: string): string;
 export function shouldSearch(text: string): boolean;
+export function shouldTriggerLookback(text: string): boolean;
+export function inferReadingPhase(
+  memory: Memory,
+  book: string,
+  messages: ChatMessage[],
+  userText: string
+): "opening" | "reading" | "reflecting";
+export function detectReplyStance(userText: string): "hold" | "explore" | "deepen";
+export function buildBookTrajectory(memory: Memory, book: string, maxItems?: number): string;
+export function buildTurnCompanionPrompt(input: {
+  phase: "opening" | "reading" | "reflecting";
+  stance: "hold" | "explore" | "deepen";
+  searchUsed: boolean;
+  trajectory?: string;
+}): string;
 export function sanitizeAssistantReply(text: string): string;
 export function demoReply(book: string, userText: string): string;
 export function buildSystemPrompt(memory: Memory, book: string, mode: ModeKey): string;
@@ -80,6 +95,20 @@ export function buildNewBookGreetingUserMessage(memory: Memory, book: string): s
 export function buildReturnGreetingUserMessage(memory: Memory, book: string): string;
 export function fallbackReturnGreeting(memory: Memory, book: string): string;
 export function getLastConversationForBook(memory: Memory, book: string): Conversation | null;
+export function commitTurn(
+  memory: Memory,
+  input: { book: string; mode: ModeKey; userText: string; assistantText: string; messages: ChatMessage[] }
+): Memory;
+export function getBookSessionMessages(memory: Memory, book: string): ChatMessage[];
+export type TimelineEntry = {
+  date: string;
+  kind: "note" | "session" | "insight";
+  book: string;
+  label: string;
+  content: string;
+};
+export function buildMemoryTimeline(memory: Memory, book?: string | null, maxItems?: number): TimelineEntry[];
+export function formatTimelineEntry(entry: TimelineEntry): { prefix: string; content: string };
 export function captureTurn(
   memory: Memory,
   input: { book: string; mode: ModeKey; userText: string; assistantText: string }

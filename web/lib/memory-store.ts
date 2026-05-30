@@ -1,8 +1,8 @@
 "use client";
 
 import { getSupabaseBrowser } from "./supabase/client";
-import { defaultMemory, normalizeMemory } from "@/lib/core.mjs";
-import type { Memory } from "@/lib/core.mjs";
+import { defaultMemory, normalizeMemory } from "@/lib/core";
+import type { Memory } from "@/lib/core";
 
 const LOCAL_KEY = "iyue_web_memory_v1";
 

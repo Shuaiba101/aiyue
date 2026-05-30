@@ -8,16 +8,23 @@ import {
   buildNewBookGreetingUserMessage,
   buildReturnGreetingUserMessage,
   buildSystemPrompt,
+  buildBookTrajectory,
+  buildMemoryTimeline,
+  buildTurnCompanionPrompt,
   buildWelcomeBackHint,
-  captureTurn,
+  commitTurn,
   defaultMemory,
+  detectReplyStance,
   fallbackReturnGreeting,
+  formatTimelineEntry,
+  getBookSessionMessages,
   hasBookHistory,
+  inferReadingPhase,
   recordConversation,
   shouldConsolidate,
   shouldSearch
-} from "@/lib/core.mjs";
-import type { ChatMessage, Memory, ModeKey } from "@/lib/core.mjs";
+} from "@/lib/core";
+import type { ChatMessage, Memory, ModeKey } from "@/lib/core";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadMemory, saveMemory } from "@/lib/memory-store";
@@ -445,13 +452,17 @@ export default function Home() {
     revealText(text);
   }
 
-  function recordTurn(userText: string, assistantText: string) {
-    setMemory((current) => captureTurn(current, { book, mode, userText, assistantText }));
-  }
-
-  function persistSession(nextMessages: ChatMessage[]) {
-    if (!book || !nextMessages.length) return;
-    setMemory((current) => recordConversation(current, { book, mode, messages: nextMessages }));
+  function commitAndSave(
+    userText: string,
+    assistantText: string,
+    completed: ChatMessage[]
+  ) {
+    setMemory((current) => {
+      const next = commitTurn(current, { book, mode, userText, assistantText, messages: completed });
+      void saveMemory(next, authUserId);
+      void runConsolidation(next);
+      return next;
+    });
   }
 
   // 梦境整理 / 人格进化：把最近的陪读记录交给模型，提炼洞察并更新沟通策略。
@@ -468,19 +479,50 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok || !data.raw) return;
-      setMemory((current) => applyConsolidation(current, data.raw));
+      setMemory((current) => {
+        const next = applyConsolidation(current, data.raw);
+        void saveMemory(next, authUserId);
+        return next;
+      });
       flash("i阅 又更懂你了一点。");
     } catch {
       // 后台增益，失败静默。
     }
   }
 
-  // 进入一本书：让 i阅 主动用一句自然的话打招呼。
+  function persistGreeting(title: string, greeting: string) {
+    setMemory((current) => {
+      const messages: ChatMessage[] = [{ role: "assistant", content: greeting }];
+      const next = recordConversation(current, { book: title, mode, messages });
+      void saveMemory(next, authUserId);
+      return next;
+    });
+  }
+
+  // 进入一本书：有保存的对话则恢复；否则让 i阅 主动打招呼。
   async function openWithBook(title: string) {
     setBook(title);
-    setMessages([]);
     setMessageDraft("");
     setInputOpen(false);
+
+    const priorMessages = getBookSessionMessages(memory, title);
+    if (priorMessages.length > 0) {
+      setMessages(priorMessages);
+      const lastLine = priorMessages[priorMessages.length - 1]?.content || "";
+      setSubtitle(lastLine);
+      setIsThinking(false);
+      setMemory((current) => {
+        const next = structuredClone(current);
+        if (!next.reader_profile.reading_history.includes(title)) {
+          next.reader_profile.reading_history = [...next.reader_profile.reading_history, title].slice(-30);
+        }
+        return next;
+      });
+      flash(`接着聊《${title}》。`);
+      return;
+    }
+
+    setMessages([]);
     setMemory((current) => {
       const next = structuredClone(current);
       if (!next.reader_profile.reading_history.includes(title)) {
@@ -506,15 +548,22 @@ export default function Home() {
           needsSearch: false,
           messages: [{ role: "user", content: greetingPrompt }],
           userApiKey: session?.userApiKey || undefined,
-          systemPrompt: buildSystemPrompt(memory, title, mode)
+          systemPrompt: buildSystemPrompt(memory, title, mode),
+          turnCompanionPrompt: buildTurnCompanionPrompt({
+            phase: returning ? "reading" : "opening",
+            stance: "deepen",
+            searchUsed: false
+          })
         })
       });
       const data = await response.json();
       const greeting = response.ok && data.reply ? data.reply : fallback;
       setMessages([{ role: "assistant", content: greeting }]);
+      persistGreeting(title, greeting);
       void deliver(greeting);
     } catch {
       setMessages([{ role: "assistant", content: fallback }]);
+      persistGreeting(title, fallback);
       void deliver(fallback);
     }
   }
@@ -543,6 +592,16 @@ export default function Home() {
     setInputOpen(false);
     setIsThinking(true);
 
+    const phase = inferReadingPhase(memory, book, messages, text);
+    const stance = detectReplyStance(text);
+    const needsSearch = shouldSearch(text);
+    const turnCompanionPrompt = buildTurnCompanionPrompt({
+      phase,
+      stance,
+      searchUsed: needsSearch,
+      trajectory: phase === "reflecting" ? buildBookTrajectory(memory, book) : ""
+    });
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -550,10 +609,11 @@ export default function Home() {
         body: JSON.stringify({
           book,
           mode,
-          needsSearch: shouldSearch(text),
+          needsSearch,
           messages: nextMessages.slice(-10),
           userApiKey: session.userApiKey || undefined,
-          systemPrompt: buildSystemPrompt(memory, book, mode)
+          systemPrompt: buildSystemPrompt(memory, book, mode),
+          turnCompanionPrompt
         })
       });
       const data = await response.json();
@@ -562,11 +622,9 @@ export default function Home() {
       const completed = [...nextMessages, assistantMessage];
       setMessages(completed);
       void deliver(data.reply);
-      recordTurn(text, data.reply);
-      const consolidated = recordConversation(memory, { book, mode, messages: completed });
-      persistSession(completed);
-      void runConsolidation(consolidated);
+      commitAndSave(text, data.reply, completed);
       if (data.usedSearch) flash("查了一点资料。");
+      if (phase === "reflecting") flash("帮你把和这本书的轨迹记下了。");
       if (data.demo) flash("演示回应：配置 DeepSeek Key 后会变成真实 AI。");
       if (!session.userApiKey && session.plan === "trial") {
         setSession((current) => (current ? { ...current, trialRemaining: Math.max(0, current.trialRemaining - 1) } : current));
@@ -964,37 +1022,35 @@ export default function Home() {
 
       {modal === "memory" && (
         <section className="modal">
-          <div className="panel">
-            <h2>i阅 帮你记着</h2>
+          <div className="panel memoryPanel">
+            <h2>心迹 · i阅 帮你记着</h2>
+            <p className="memoryLead">每一句触动、每一次陪读、每一条洞察——都会留下来，越聊越懂你。</p>
             {memory.reader_profile.name && (
               <div className="memoryItem"><strong>称呼</strong><br />{memory.reader_profile.name}</div>
             )}
-            {memory.reader_profile.work && (
-              <div className="memoryItem"><strong>工作与状态</strong><br />{memory.reader_profile.work}</div>
-            )}
-            {memory.reader_profile.life_focus && (
-              <div className="memoryItem"><strong>想解决的问题</strong><br />{memory.reader_profile.life_focus}</div>
-            )}
-            {memory.reader_profile.companion_preference && (
-              <div className="memoryItem"><strong>希望的陪伴</strong><br />{memory.reader_profile.companion_preference}</div>
-            )}
             <div className="memoryItem"><strong>正在读</strong><br />{book || "尚未开始"}{memory.reader_profile.currentChapter ? ` · ${memory.reader_profile.currentChapter}` : ""}</div>
-            {memory.reader_profile.reading_history.length > 0 && (
-              <div className="memoryItem"><strong>读过的书</strong><br />{memory.reader_profile.reading_history.slice(-12).join("、")}</div>
-            )}
-            {memory.reader_profile.preferences.length > 0 && (
-              <div className="memoryItem"><strong>你的兴趣</strong><br />{memory.reader_profile.preferences.join("、")}</div>
-            )}
-            {memory.reading_notes.filter((note) => note.book === book).slice(-4).length > 0 && (
-              <div className="memoryItem"><strong>这本书里聊过</strong><br />{memory.reading_notes.filter((note) => note.book === book).slice(-4).map((note) => note.content).join("\n")}</div>
+            {book && buildBookTrajectory(memory, book) && (
+              <div className="memoryItem"><strong>你和《{book}》的轨迹</strong><br />{buildBookTrajectory(memory, book)}</div>
             )}
             {memory.reader_profile.personality_notes && (
-              <div className="memoryItem"><strong>关于怎么陪你</strong><br />{memory.reader_profile.personality_notes}</div>
+              <div className="memoryItem"><strong>怎么陪你更好</strong><br />{memory.reader_profile.personality_notes}</div>
             )}
-            {memory.dream_notes.length > 0 && (
-              <div className="memoryItem"><strong>跨会话的洞察</strong><br />{memory.dream_notes.slice(-2).map((item) => item.content).join("\n\n")}</div>
-            )}
-            <div className="memoryItem"><strong>最近聊过</strong><br />{memory.conversations.slice(-4).reverse().map((item) => `《${item.book}》：${item.summary}`).join("\n\n") || "暂无"}</div>
+            <div className="memoryTimeline">
+              <strong className="timelineHeading">痕迹</strong>
+              {buildMemoryTimeline(memory, book || null).length === 0 ? (
+                <p className="timelineEmpty">还没有痕迹——聊几句，这里会慢慢长出来。</p>
+              ) : (
+                buildMemoryTimeline(memory, book || null).map((entry, index) => {
+                  const { prefix, content } = formatTimelineEntry(entry);
+                  return (
+                    <article className={`traceItem trace-${entry.kind}`} key={`${entry.date}-${index}`}>
+                      <span className="traceMeta">{prefix}</span>
+                      <p>{content}</p>
+                    </article>
+                  );
+                })
+              )}
+            </div>
             <div className="actions">
               <button onClick={() => setMemory(defaultMemory())} type="button">清空</button>
               <button onClick={() => setModal(null)} type="button">关闭</button>

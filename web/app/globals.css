@@ -867,6 +867,68 @@ button {
   font-weight: 400;
 }
 
+.memoryPanel {
+  max-height: min(78vh, 720px);
+  overflow-y: auto;
+}
+
+.memoryLead {
+  margin: 0 0 8px;
+  color: rgba(255, 238, 215, 0.52);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.memoryTimeline {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 220, 170, 0.12);
+}
+
+.timelineHeading {
+  display: block;
+  margin-bottom: 12px;
+  color: rgba(255, 238, 215, 0.9);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.timelineEmpty {
+  margin: 0;
+  color: rgba(255, 238, 215, 0.48);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.traceItem {
+  margin-bottom: 14px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(255, 220, 170, 0.16);
+}
+
+.traceItem.trace-insight {
+  border-left-color: rgba(180, 220, 255, 0.35);
+}
+
+.traceItem.trace-session {
+  border-left-color: rgba(255, 200, 120, 0.28);
+}
+
+.traceMeta {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(255, 238, 215, 0.46);
+  font-size: 12px;
+}
+
+.traceItem p {
+  margin: 0;
+  color: rgba(255, 238, 215, 0.78);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;

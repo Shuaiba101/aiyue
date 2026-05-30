@@ -1,5 +1,5 @@
 // i阅 共享内核 —— 平台无关的「大脑」。
-// 网页端（Next.js/TS）通过 @/lib/core.mjs 引入，类型来自同目录 core.d.mts。
+// 网页端（Next.js/TS）通过 @/lib/core 引入，类型来自同目录 core.d.mts。
 // 桌面端（单文件 HTML，无构建）可直接 <script type="module"> import 本文件。
 // 这里只放纯逻辑：人格、记忆结构、记忆沉淀、人格进化。存储与 UI 留给各端。
 
@@ -80,6 +80,7 @@ export function extractNodeName(text) {
 }
 
 export function classifyNote(text) {
+  if (shouldTriggerLookback(text)) return "回望";
   if (/第\s*[一二三四五六七八九十百千万\d]+\s*章/.test(text)) return "章节";
   if (/[？?]|为什么|如何|怎么|是不是/.test(text)) return "问题";
   if (String(text || "").length > 40) return "金句";
@@ -105,6 +106,9 @@ export function sanitizeAssistantReply(text) {
 /** 没有配置任何 API Key 时的离线占位回复，保证体验不空转。 */
 export function demoReply(book, userText) {
   const clean = String(userText || "").trim();
+  if (shouldTriggerLookback(clean)) {
+    return `《${book || "这本书"}》读完了。不写总结——你自己心里，最后真正留下的是哪一句？`;
+  }
   if (/第\s*[一二三四五六七八九十百千万\d]+\s*章/.test(clean)) {
     return `这一章你先读你的，不用急着总结。哪一句最卡你，或者哪一句让你停了一下？发给我，我帮你记着。`;
   }
@@ -115,6 +119,70 @@ export function demoReply(book, userText) {
     return `这个反应很重要，我记下了。它碰到你的哪一块？`;
   }
   return `我听到了，帮你记着。你自己读的时候，这句话如果是真的，会改变你什么？`;
+}
+
+/** 读者是否表达「读完了 / 要收尾」——触发回望模式。 */
+export function shouldTriggerLookback(text) {
+  const clean = String(text || "").trim();
+  return /读完了|看完了|合上书|整本读完|全书读完|最后一章|读到最后|收尾了|结束这本|不想读这本了/.test(clean);
+}
+
+/** 推断当前陪读阶段：opening 刚进入 · reading 读中 · reflecting 读完回望。 */
+export function inferReadingPhase(memory, book, messages, userText) {
+  if (shouldTriggerLookback(userText)) return "reflecting";
+  const m = normalizeMemory(memory);
+  const bookNotes = m.reading_notes.filter((note) => note.book === book);
+  const userCount = (messages || []).filter((item) => item.role === "user").length;
+  const hasChapter =
+    bookNotes.some((note) => note.type === "章节") ||
+    /第\s*[一二三四五六七八九十百千万\d]+\s*章/.test(String(userText || ""));
+  if (!hasBookHistory(m, book) && userCount <= 1 && !hasChapter) return "opening";
+  if (userCount <= 2 && bookNotes.length <= 2 && !hasChapter) return "opening";
+  return "reading";
+}
+
+/** 本轮回复姿态：hold 先接住 · explore 陪他想 · deepen 可推一步。 */
+export function detectReplyStance(userText) {
+  const text = String(userText || "").trim();
+  if (/触动|难受|兴奋|困惑|喜欢|不喜欢|震撼|我觉得|我感觉|心情|失落|开心|焦虑|感动|哭|怕|孤独|温暖|停了一下|愣|走神/.test(text)) {
+    return "hold";
+  }
+  if (/[？?]|为什么|如何|怎么|是不是|吗$|么$/.test(text)) return "explore";
+  if (text.length <= 14 && !/[？?]/.test(text)) return "hold";
+  return "deepen";
+}
+
+/** 某本书的思考轨迹（供回望与记忆面板）。 */
+export function buildBookTrajectory(memory, book, maxItems = 10) {
+  const notes = normalizeMemory(memory).reading_notes.filter((note) => note.book === book).slice(-maxItems);
+  if (!notes.length) return "";
+  return notes
+    .map((note, index) => `${index + 1}. [${note.type}] ${compactText(note.content, 72)}`)
+    .join("\n");
+}
+
+/** 每轮对话的伴随指令（阶段 + 姿态 + 是否联网）。 */
+export function buildTurnCompanionPrompt({ phase, stance, searchUsed, trajectory = "" }) {
+  const phaseGuide = {
+    opening: "刚翻开或刚定下书名：帮他进入状态，可问一个轻松的小问题；别剧透、别介绍全书。",
+    reading: "读的过程中：陪他消化卡点，用提问推他的思考，不替他想。",
+    reflecting:
+      "读者表示读完了或要收尾：不做全书总结、不讲中心思想；基于你们聊过的内容，抛 1 个只有「读过且聊过」才答得上的私人化回望问题，帮他内化。"
+  };
+  const stanceGuide = {
+    hold: "他可能在情绪里或只是扔来一句摘抄：先接住，本轮可以不提问，或最多一个极轻的确认；不要分析、不要 lecturing。",
+    explore: "他在发问：别急着给答案，陪他把自己的问题想得更清楚。",
+    deepen: "可轻轻推一步：最多一个好问题，把话往深处带，不要连珠炮。"
+  };
+  const trajectoryBlock =
+    phase === "reflecting" && trajectory
+      ? `\n【你和这本书的轨迹——仅供回望参考，不要逐条复述】\n${trajectory}`
+      : "";
+  return `【本轮陪伴】
+阶段：${phaseGuide[phase] || phaseGuide.reading}
+姿态：${stanceGuide[stance] || stanceGuide.deepen}
+工具：${searchUsed ? "已查了一点资料" : "未联网搜索"}
+硬约束：2-4 句；不输出括号旁白；不替他把书读完；读者记得的应该是自己想通的，不是你讲的道理。${trajectoryBlock}`;
 }
 
 /** 构建带记忆与人格进化的 System Prompt。 */
@@ -158,16 +226,26 @@ export function buildSystemPrompt(memory, book, mode) {
 
 你的价值不是讲书、不是给标准答案，而是：陪他把自己的书读进心里，并且让他感到被理解、被记住。
 
+【深入阅读——引擎是提问，不是讲解】
+把读者从被动接收推向主动思考：用提问代替结论，但每轮最多一个好问题。
+可用的推法（自然选用，不要机械套公式）：
+- 追到动机：「你觉得作者为什么这么安排？」
+- 联系自身：「你自己有过类似的时刻吗？」
+- 反向质疑：他完全认同时，轻轻问「反过来想还成立吗？」
+- 具体化：他说得笼统时，问「书里哪一句让你冒出这个念头？」
+「不提问」也是能力：他在情绪里、或只是摘抄一句话时，先接住，不必追问——一直追问会变成审讯。
+禁止：全书总结、中心思想、替读者下结论、不管发什么都套「这让我想到书中…」。
+
 对话原则：
 1. 先懂人，再聊书：先体会这句话背后的情绪和真实意图，回应那个「人」。
 2. 他发什么你接什么：可以是书里的话、可以是生活、可以是情绪；不必强行拉回「书本体」。
-3. 多一个好问题，少一段大道理：把对话往深处带，而不是往结论带。
+3. 少说一段大道理，多留一个让他自己往下想的空间。
 4. 2-4 句，像在身边说话，不像写文章或上课。
 5. 不输出思考过程，不用 <think>；不用括号动作、舞台说明；不知道就说不知道。
 
 【克制原则】
 就事论书，专注当前这本《${book || "未命名"}》。不要主动把其他书的情节或观点扯进来；除非读者自己提到别的书。
-你跨书记住的是「这个人」，不是把书架连成网。用记忆去更懂他，不是去展示你知道多少本书。
+你跨书记住的是「这个人」，不是把书架连成网。用记忆去更懂他、呼应他的变化（「上次你在这里停了很久」），不是复述他说过的清单。
 
 【你记住的这个人】
 ${knowsPerson ? personText : "（刚认识这位读者——多听、多记：他怎么称呼、在意什么、为什么此刻翻开这本书。）"}
@@ -319,6 +397,76 @@ export function recordConversation(memory, { book, mode, messages }) {
   else next.conversations.push(conversation);
   next.conversations = next.conversations.slice(-50);
   return next;
+}
+
+/** 一轮对话后：沉淀笔记 + 写入会话，原子更新。 */
+export function commitTurn(memory, { book, mode, userText, assistantText, messages }) {
+  let next = captureTurn(memory, { book, mode, userText, assistantText });
+  next = recordConversation(next, { book, mode, messages });
+  return next;
+}
+
+/** 恢复某本书上次保存的完整对话（供重新进入时续聊）。 */
+export function getBookSessionMessages(memory, book) {
+  const last = getLastConversationForBook(memory, book);
+  return last?.messages?.length ? last.messages : [];
+}
+
+/** 心迹时间线：笔记、陪读、洞察，按时间倒序。 */
+export function buildMemoryTimeline(memory, book = null, maxItems = 24) {
+  const m = normalizeMemory(memory);
+  const items = [];
+
+  for (const note of m.reading_notes) {
+    if (book && note.book !== book) continue;
+    items.push({
+      date: note.date,
+      kind: "note",
+      book: note.book,
+      label: note.type,
+      content: note.content
+    });
+  }
+  for (const conv of m.conversations) {
+    if (book && conv.book !== book) continue;
+    items.push({
+      date: conv.date,
+      kind: "session",
+      book: conv.book,
+      label: "陪读",
+      content: conv.summary
+    });
+  }
+  if (!book) {
+    for (const dream of m.dream_notes) {
+      items.push({
+        date: dream.date,
+        kind: "insight",
+        book: "",
+        label: "洞察",
+        content: dream.content
+      });
+    }
+  }
+
+  items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return items.slice(0, maxItems);
+}
+
+function formatTraceDate(iso) {
+  const days = daysSince(iso);
+  if (days <= 0) return "今天";
+  if (days === 1) return "昨天";
+  if (days < 7) return `${days} 天前`;
+  return new Date(iso).toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+}
+
+/** 格式化单条心迹供 UI 展示。 */
+export function formatTimelineEntry(entry) {
+  const when = formatTraceDate(entry.date);
+  const where = entry.book ? `《${entry.book}》` : "";
+  const prefix = [when, where, entry.label].filter(Boolean).join(" · ");
+  return { prefix, content: entry.content };
 }
 
 /** 距上次进化是否够久、且积累了足够的新对话。 */

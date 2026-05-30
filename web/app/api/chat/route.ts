@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { demoReply, sanitizeAssistantReply } from "@/lib/core.mjs";
+import { demoReply, sanitizeAssistantReply } from "@/lib/core";
 
 export const runtime = "nodejs";
 
@@ -9,6 +9,7 @@ const requestSchema = z.object({
   needsSearch: z.boolean().default(false),
   userApiKey: z.string().optional(),
   systemPrompt: z.string().min(1),
+  turnCompanionPrompt: z.string().optional(),
   messages: z.array(z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string()
@@ -60,18 +61,18 @@ export async function POST(request: Request) {
 
   const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content || "";
   const searchContext = input.needsSearch ? await tavilySearch(input.book, lastUserMessage) : "";
-  const messages = [
-    { role: "system", content: input.systemPrompt },
-    {
-      role: "system",
-      content: `【本轮陪伴】
+  const turnPrompt =
+    input.turnCompanionPrompt?.trim() ||
+    `【本轮陪伴】
 工具：${searchContext ? "已查了一点资料" : "未联网搜索"}
 策略：
 - 读者自己读纸质书，你只是陪着；接住他这条消息，不要抢话、不要代读
 - 他说什么都能聊：书里的、生活的、情绪的，都先接住
 - 自然运用你对他的记忆，让他感到被懂、被记着
-- 2-4 句，留一个好问题；不输出括号旁白`
-    },
+- 2-4 句；他在情绪里时可不提问；否则最多一个好问题；不输出括号旁白`;
+  const messages = [
+    { role: "system", content: input.systemPrompt },
+    { role: "system", content: turnPrompt },
     ...(searchContext ? [{ role: "system", content: `以下是按需联网搜索结果，只在可靠时使用，不要机械复述：\n${searchContext}` }] : []),
     ...input.messages
   ];
