@@ -2,7 +2,7 @@
 
 AI 阅读陪伴产品。你读纸质书，i阅 安静地在旁边——有灵感、疑问或触动，说给它听，它会陪你想下去，并且越来越懂你。
 
-- **网页版（商业化）**：`web/` — Next.js，部署在 [ireading.top](https://ireading.top)
+- **网页版（商业化）**：`web/` — Next.js，部署在 [ireading.top](https://ireading.top)（Git push → Vercel 自动部署）
 - **桌面版（本地化）**：Electron + 单文件 HTML，数据留在本机
 - **共享内核**：`web/lib/core.mjs` — 记忆、人格、克制的自我进化
 
