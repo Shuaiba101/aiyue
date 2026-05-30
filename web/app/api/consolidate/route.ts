@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { getAuthUser } from "@/lib/auth/server";
+import { checkPlatformAccess } from "@/lib/quota/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
 
@@ -18,7 +21,22 @@ export async function POST(request: Request) {
     return Response.json({ error: "请求格式不对。" }, { status: 400 });
   }
 
-  const apiKey = parsed.data.userApiKey?.trim() || process.env.DEEPSEEK_API_KEY;
+  const userApiKey = parsed.data.userApiKey?.trim();
+  const usingUserKey = Boolean(userApiKey);
+  const cloudEnabled = isSupabaseConfigured();
+
+  if (cloudEnabled && !usingUserKey) {
+    const user = await getAuthUser();
+    if (!user) {
+      return Response.json({ error: "请先登录。" }, { status: 401 });
+    }
+    const access = await checkPlatformAccess(user.id);
+    if (!access.ok) {
+      return Response.json({ error: "额度已用完。", code: "quota_exhausted" }, { status: 402 });
+    }
+  }
+
+  const apiKey = userApiKey || process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     return Response.json({ raw: "", skipped: true });
   }

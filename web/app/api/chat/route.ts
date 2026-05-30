@@ -1,5 +1,8 @@
 import { z } from "zod";
+import { getAuthUser } from "@/lib/auth/server";
 import { demoReply, sanitizeAssistantReply } from "@/lib/core";
+import { checkPlatformAccess, consumePlatformTurn } from "@/lib/quota/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
 
@@ -49,7 +52,32 @@ export async function POST(request: Request) {
   }
 
   const input = parsed.data;
-  const apiKey = input.userApiKey?.trim() || process.env.DEEPSEEK_API_KEY;
+  const userApiKey = input.userApiKey?.trim();
+  const usingUserKey = Boolean(userApiKey);
+  const cloudEnabled = isSupabaseConfigured();
+  let authUserId: string | null = null;
+
+  if (cloudEnabled && !usingUserKey) {
+    const user = await getAuthUser();
+    if (!user) {
+      return Response.json({ error: "请先登录后再使用平台额度。" }, { status: 401 });
+    }
+    authUserId = user.id;
+
+    const access = await checkPlatformAccess(user.id);
+    if (!access.ok) {
+      return Response.json(
+        {
+          error: "试读额度已用完，请开通套餐或填入自己的 DeepSeek Key。",
+          code: "quota_exhausted",
+          quota: access.quota
+        },
+        { status: 402 }
+      );
+    }
+  }
+
+  const apiKey = userApiKey || process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content || "";
     return Response.json({
@@ -98,5 +126,12 @@ export async function POST(request: Request) {
 
   const data = await response.json();
   const reply = sanitizeAssistantReply(data.choices?.[0]?.message?.content || "");
-  return Response.json({ reply, usedSearch: Boolean(searchContext) });
+
+  let quota;
+  if (cloudEnabled && !usingUserKey && authUserId) {
+    const consumed = await consumePlatformTurn(authUserId);
+    quota = consumed.quota;
+  }
+
+  return Response.json({ reply, usedSearch: Boolean(searchContext), quota });
 }

@@ -29,18 +29,18 @@ import type { ChatMessage, Memory, ModeKey } from "@/lib/core";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadMemory, saveMemory, clearLocalMemory } from "@/lib/memory-store";
+import { FREE_TRIAL_TURNS, type QuotaPlan } from "@/lib/quota/constants";
 
 type UserSession = {
   name: string;
   email: string;
-  plan: "trial" | "pro";
+  plan: QuotaPlan;
   trialRemaining: number;
   userApiKey: string;
 };
 type AuthTab = "invite" | "apply" | "login";
 
 const SESSION_KEY = "iyue_web_session_v1";
-const FREE_TRIAL_TURNS = 30;
 const MODE: ModeKey = "fireplace";
 const GREETING = "今天你想读什么书？书在你手里，有想聊的随时发给我。";
 
@@ -161,6 +161,11 @@ export default function Home() {
     };
   }, [authUserId, authEmail]);
 
+  // 登录后从服务端同步额度（绑 user_id，不可清缓存绕过）。
+  useEffect(() => {
+    void refreshQuota();
+  }, [authUserId, cloudEnabled]);
+
   // 记忆变化后防抖落盘
   useEffect(() => {
     if (!hydratedRef.current) return;
@@ -185,6 +190,40 @@ export default function Home() {
   function flash(message: string) {
     setToast(message);
     setTimeout(() => setToast(""), 2600);
+  }
+
+  function applyQuotaFromServer(quota: {
+    plan?: QuotaPlan;
+    turnsRemaining?: number;
+  }) {
+    if (quota.plan === undefined && quota.turnsRemaining === undefined) return;
+    setSession((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        ...(quota.plan !== undefined ? { plan: quota.plan } : {}),
+        ...(quota.turnsRemaining !== undefined ? { trialRemaining: quota.turnsRemaining } : {})
+      };
+    });
+  }
+
+  async function refreshQuota() {
+    if (!cloudEnabled || !authUserId) return;
+    try {
+      const response = await fetch("/api/quota");
+      if (!response.ok) return;
+      const data = await response.json();
+      applyQuotaFromServer({ plan: data.plan, turnsRemaining: data.turnsRemaining });
+    } catch {
+      // 额度拉取失败时保留本地展示。
+    }
+  }
+
+  function handleQuotaExhausted() {
+    setIsThinking(false);
+    setModal("paywall");
+    applyQuotaFromServer({ plan: "trial", turnsRemaining: 0 });
+    flash("试读额度已用完。");
   }
 
   // 早期只做文字：回复以打字机方式浮现，不调用语音合成。
@@ -506,7 +545,12 @@ export default function Home() {
         })
       });
       const data = await response.json();
+      if (response.status === 402) {
+        handleQuotaExhausted();
+        return;
+      }
       const greeting = response.ok && data.reply ? data.reply : fallback;
+      if (data.quota) applyQuotaFromServer(data.quota);
       setMessages([{ role: "assistant", content: greeting }]);
       persistGreeting(title, greeting);
       void deliver(greeting);
@@ -527,8 +571,7 @@ export default function Home() {
       return;
     }
 
-    const canUseQuota = session.plan === "pro" || session.trialRemaining > 0;
-    if (!session.userApiKey && !canUseQuota) {
+    if (!session.userApiKey && session.plan !== "pro" && session.trialRemaining <= 0) {
       setModal("paywall");
       return;
     }
@@ -566,7 +609,13 @@ export default function Home() {
         })
       });
       const data = await response.json();
+      if (response.status === 402) {
+        handleQuotaExhausted();
+        setMessages(messages);
+        return;
+      }
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      if (data.quota) applyQuotaFromServer(data.quota);
       const assistantMessage: ChatMessage = { role: "assistant", content: data.reply };
       const completed = [...nextMessages, assistantMessage];
       setMessages(completed);
@@ -575,9 +624,6 @@ export default function Home() {
       if (data.usedSearch) flash("查了一点资料。");
       if (phase === "reflecting") flash("帮你把和这本书的轨迹记下了。");
       if (data.demo) flash("演示回应：配置 DeepSeek Key 后会变成真实 AI。");
-      if (!session.userApiKey && session.plan === "trial") {
-        setSession((current) => (current ? { ...current, trialRemaining: Math.max(0, current.trialRemaining - 1) } : current));
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "请求失败";
       setIsThinking(false);
@@ -607,8 +653,22 @@ export default function Home() {
     flash("设置已保存。");
   }
 
-  function activateProPlan() {
-    setSession((current) => (current ? { ...current, plan: "pro", trialRemaining: 999 } : current));
+  async function activateProPlan() {
+    if (cloudEnabled && authUserId) {
+      try {
+        const response = await fetch("/api/quota/activate", { method: "POST" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "开通失败");
+        applyQuotaFromServer({ plan: data.plan, turnsRemaining: data.turnsRemaining });
+        setModal(null);
+        flash("已开通套餐，继续读吧。");
+        return;
+      } catch (error) {
+        flash(error instanceof Error ? error.message : "开通失败");
+        return;
+      }
+    }
+    setSession((current) => (current ? { ...current, plan: "pro", trialRemaining: FREE_TRIAL_TURNS } : current));
     setModal(null);
     flash("已模拟开通套餐。");
   }
