@@ -46,7 +46,8 @@ async function tavilySearch(book: string, query: string) {
 }
 
 export async function POST(request: Request) {
-  const parsed = requestSchema.safeParse(await request.json());
+  try {
+    const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json({ error: "请求格式不对。" }, { status: 400 });
   }
@@ -125,7 +126,8 @@ export async function POST(request: Request) {
   }
 
   const data = await response.json();
-  const reply = sanitizeAssistantReply(data.choices?.[0]?.message?.content || "");
+  const message = data.choices?.[0]?.message;
+  const reply = sanitizeAssistantReply(message?.content || "");
 
   let quota;
   if (cloudEnabled && !usingUserKey && authUserId) {
@@ -134,4 +136,9 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ reply, usedSearch: Boolean(searchContext), quota });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "未知错误";
+    console.error("[api/chat]", message);
+    return Response.json({ error: "对话服务暂时不可用，请稍后再试。" }, { status: 500 });
+  }
 }

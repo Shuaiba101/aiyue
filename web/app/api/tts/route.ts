@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sanitizeAssistantReply } from "@/lib/core";
 
 export const runtime = "nodejs";
 
@@ -6,7 +7,7 @@ const requestSchema = z.object({
   text: z.string().min(1).max(1000),
   // 预置音色 id（如「苏打」「茉莉」），不传则用 mimo_default
   voice: z.string().optional(),
-  // 风格标签（如「温柔」「亲切」），会拼成 (风格)文本 控制语气
+  // 风格标签：作为 user 消息传入控制语气，不拼进朗读正文（否则会被读出来）
   style: z.string().optional(),
   // 克隆音色样本；传了就走 voiceclone 模型
   voiceSample: z.string().optional()
@@ -26,18 +27,26 @@ export async function POST(request: Request) {
   }
 
   const { text, voice, style, voiceSample } = parsed.data;
+  const spokenText = sanitizeAssistantReply(text);
+  if (!spokenText) {
+    return Response.json({ error: "没有可朗读的正文。" }, { status: 400 });
+  }
   const isClone = Boolean(voiceSample);
-  const content = !isClone && style ? `(${style})${text}` : text;
 
   const body = isClone
     ? {
         model: "mimo-v2.5-tts-voiceclone",
-        messages: [{ role: "assistant", content: text }],
+        messages: [{ role: "assistant", content: spokenText }],
         audio: { format: "wav", voice: voiceSample }
       }
     : {
         model: "mimo-v2.5-tts",
-        messages: [{ role: "assistant", content }],
+        messages: style
+          ? [
+              { role: "user", content: style },
+              { role: "assistant", content: spokenText }
+            ]
+          : [{ role: "assistant", content: spokenText }],
         audio: { format: "wav", voice: voice || "mimo_default" }
       };
 

@@ -31,6 +31,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadMemory, saveMemory, clearLocalMemory } from "@/lib/memory-store";
 import { FREE_TRIAL_TURNS, type QuotaPlan } from "@/lib/quota/constants";
 import { speakText, stopSpeaking } from "@/lib/tts-client";
+import { sanitizeAssistantReply } from "@/lib/core";
+import { readJsonResponse } from "@/lib/read-json-response";
 
 type UserSession = {
   name: string;
@@ -203,6 +205,12 @@ export default function Home() {
     setTimeout(() => setToast(""), 2600);
   }
 
+  function pickQuotaFields(data: Record<string, unknown>): { plan?: QuotaPlan; turnsRemaining?: number } {
+    const plan = data.plan === "trial" || data.plan === "pro" ? data.plan : undefined;
+    const turnsRemaining = typeof data.turnsRemaining === "number" ? data.turnsRemaining : undefined;
+    return { plan, turnsRemaining };
+  }
+
   function applyQuotaFromServer(quota: {
     plan?: QuotaPlan;
     turnsRemaining?: number;
@@ -223,8 +231,8 @@ export default function Home() {
     try {
       const response = await fetch("/api/quota");
       if (!response.ok) return;
-      const data = await response.json();
-      applyQuotaFromServer({ plan: data.plan, turnsRemaining: data.turnsRemaining });
+      const data = await readJsonResponse(response);
+      applyQuotaFromServer(pickQuotaFields(data));
     } catch {
       // 额度拉取失败时保留本地展示。
     }
@@ -237,10 +245,11 @@ export default function Home() {
     flash("试读额度已用完。");
   }
 
-  // 早期只做文字：回复以打字机方式浮现，不调用语音合成。
+  // 打字机：固定节奏（无语音时）
   function revealText(full: string) {
     if (revealRef.current) clearInterval(revealRef.current);
     setSubtitle("");
+    if (!full) return;
     let index = 0;
     revealRef.current = setInterval(() => {
       index += 1;
@@ -252,6 +261,24 @@ export default function Home() {
     }, 42);
   }
 
+  // 打字机：按语音时长同步（与 MiMo 同时开始）
+  function revealTextSynced(full: string, durationMs: number) {
+    if (revealRef.current) clearInterval(revealRef.current);
+    setSubtitle("");
+    if (!full) return;
+    const chars = full.length;
+    const intervalMs = Math.max(20, Math.min(72, durationMs / chars));
+    let index = 0;
+    revealRef.current = setInterval(() => {
+      index += 1;
+      setSubtitle(full.slice(0, index));
+      if (index >= chars) {
+        if (revealRef.current) clearInterval(revealRef.current);
+        revealRef.current = null;
+      }
+    }, intervalMs);
+  }
+
   useEffect(() => () => {
     if (revealRef.current) clearInterval(revealRef.current);
     stopSpeaking();
@@ -261,8 +288,8 @@ export default function Home() {
     setAuthBusy(true);
     try {
       const response = await fetch("/api/auth/wechat");
-      const data = await response.json();
-      if (!data.enabled || !data.url) {
+      const data = await readJsonResponse(response);
+      if (!data.enabled || typeof data.url !== "string") {
         flash("微信登录即将开放，请先用邮箱进入。");
         return;
       }
@@ -331,9 +358,9 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, inviteCode })
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) {
-        flash(data.error || "注册失败。");
+        flash(typeof data.error === "string" ? data.error : "注册失败。");
         return;
       }
       const signIn = await supabase.auth.signInWithPassword({ email, password });
@@ -366,9 +393,9 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, note: applyNoteDraft.trim() || undefined })
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok) {
-        flash(data.error || "提交失败。");
+        flash(typeof data.error === "string" ? data.error : "提交失败。");
         return;
       }
       setApplySubmitted(true);
@@ -449,28 +476,42 @@ export default function Home() {
     flash("已退出登录。");
   }
 
-  // 文字送达 + MiMo 语音：思考结束后逐字显示，同时朗读 i阅 的回复。
+  // 文字 + 语音：有 TTS 时等音频就绪后同步开始；否则仅打字机。
   function deliver(text: string) {
     setIsThinking(false);
-    revealText(text);
+    const clean = sanitizeAssistantReply(text);
+    const useTts = session?.ttsEnabled !== false && Boolean(clean);
 
-    if (session?.ttsEnabled === false) return;
+    if (!useTts) {
+      revealText(clean);
+      return;
+    }
 
     const token = ++speakTokenRef.current;
+    if (revealRef.current) clearInterval(revealRef.current);
+    setSubtitle("");
+
     void (async () => {
+      let syncDurationMs = 0;
       const ok = await speakText({
-        text,
+        text: clean,
+        onReady: (durationMs) => {
+          if (token !== speakTokenRef.current) return;
+          syncDurationMs = durationMs;
+        },
         onStart: () => {
           if (token !== speakTokenRef.current) return;
+          revealTextSynced(clean, syncDurationMs);
           setIsSpeaking(true);
         },
         onEnd: () => {
           if (token !== speakTokenRef.current) return;
           setIsSpeaking(false);
+          setSubtitle(clean);
         }
       });
       if (token !== speakTokenRef.current) return;
-      if (!ok) setIsSpeaking(false);
+      if (!ok) revealText(clean);
     })();
   }
 
@@ -499,10 +540,10 @@ export default function Home() {
           userApiKey: session.userApiKey || undefined
         })
       });
-      const data = await response.json();
-      if (!response.ok || !data.raw) return;
+      const data = await readJsonResponse(response);
+      if (!response.ok || typeof data.raw !== "string" || !data.raw) return;
       setMemory((current) => {
-        const next = applyConsolidation(current, data.raw);
+        const next = applyConsolidation(current, data.raw as string);
         void saveMemory(next, authUserId);
         return next;
       });
@@ -578,13 +619,13 @@ export default function Home() {
           })
         })
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (response.status === 402) {
         handleQuotaExhausted();
         return;
       }
-      const greeting = response.ok && data.reply ? data.reply : fallback;
-      if (data.quota) applyQuotaFromServer(data.quota);
+      const greeting = response.ok && typeof data.reply === "string" ? data.reply : fallback;
+      if (data.quota && typeof data.quota === "object") applyQuotaFromServer(pickQuotaFields(data.quota as Record<string, unknown>));
       setMessages([{ role: "assistant", content: greeting }]);
       persistGreeting(title, greeting);
       void deliver(greeting);
@@ -642,19 +683,24 @@ export default function Home() {
           turnCompanionPrompt
         })
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (response.status === 402) {
         handleQuotaExhausted();
         setMessages(messages);
         return;
       }
-      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-      if (data.quota) applyQuotaFromServer(data.quota);
-      const assistantMessage: ChatMessage = { role: "assistant", content: data.reply };
+      if (!response.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : `HTTP ${response.status}`);
+      }
+      if (data.quota && typeof data.quota === "object") {
+        applyQuotaFromServer(pickQuotaFields(data.quota as Record<string, unknown>));
+      }
+      const reply = typeof data.reply === "string" ? data.reply : "";
+      const assistantMessage: ChatMessage = { role: "assistant", content: reply };
       const completed = [...nextMessages, assistantMessage];
       setMessages(completed);
-      void deliver(data.reply);
-      commitAndSave(text, data.reply, completed);
+      void deliver(reply);
+      commitAndSave(text, reply, completed);
       if (data.usedSearch) flash("查了一点资料。");
       if (phase === "reflecting") flash("帮你把和这本书的轨迹记下了。");
       if (data.demo) flash("演示回应：配置 DeepSeek Key 后会变成真实 AI。");
@@ -697,9 +743,11 @@ export default function Home() {
     if (cloudEnabled && authUserId) {
       try {
         const response = await fetch("/api/quota/activate", { method: "POST" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "开通失败");
-        applyQuotaFromServer({ plan: data.plan, turnsRemaining: data.turnsRemaining });
+        const data = await readJsonResponse(response);
+        if (!response.ok) {
+          throw new Error(typeof data.error === "string" ? data.error : "开通失败");
+        }
+        applyQuotaFromServer(pickQuotaFields(data));
         setModal(null);
         flash("已开通套餐，继续读吧。");
         return;

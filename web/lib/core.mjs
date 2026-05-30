@@ -91,12 +91,30 @@ export function shouldSearch(text) {
   return SEARCH_TRIGGERS.some((trigger) => text.includes(trigger)) || /[0-9]{4}|what|who|when|where/i.test(text);
 }
 
-/** 去掉 <think>、括号旁白、多余空白，让回复干净。服务端、客户端都可用。 */
+/** 去掉推理链、括号旁白、舞台说明，让回复适合展示与朗读。 */
 export function sanitizeAssistantReply(text) {
-  return String(text || "")
-    .replace(/<think>[\s\S]*?<\/think>/g, "")
-    .replace(/（[^（）]{0,120}）/g, "")
-    .replace(/\([^()]{0,120}\)/g, "")
+  let out = String(text || "");
+
+  // DeepSeek reasoner 等：think 块（修复闭合标签；兼容多种写法）
+  out = out.replace(/<(?:think(?:ing)?|redacted_thinking)>[\s\S]*?<\/(?:think(?:ing)?|redacted_thinking)>/gi, "");
+  out = out.replace(/<(?:think(?:ing)?|redacted_thinking)>[\s\S]*$/gi, "");
+
+  // 若标签不匹配，取最后一个  之后作为正文
+  const thinkParts = out.split(/<\/(?:think(?:ing)?|redacted_thinking)>/i);
+  if (thinkParts.length > 1) {
+    const tail = thinkParts[thinkParts.length - 1].trim();
+    if (tail) out = tail;
+  }
+
+  // 括号旁白（中英）
+  out = out.replace(/（[^（）\n]{0,200}）/g, "");
+  out = out.replace(/\([^()\n]{0,200}\)/g, "");
+
+  // 【舞台说明】、*动作*
+  out = out.replace(/【[^【】\n]{0,120}】/g, "");
+  out = out.replace(/\*[^*\n]{0,80}\*/g, "");
+
+  return out
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
