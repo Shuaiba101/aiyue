@@ -45,6 +45,8 @@ import {
 } from "@/lib/tts-client";
 import { sanitizeAssistantReply } from "@/lib/core";
 import { readJsonResponse } from "@/lib/read-json-response";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { applyScreenTheme, readStoredTheme, toggleScreenTheme, type ScreenTheme } from "@/lib/theme";
 
 type UserSession = {
   name: string;
@@ -96,6 +98,7 @@ export default function Home() {
   const [localEntered, setLocalEntered] = useState(false);
   const [memoryReady, setMemoryReady] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [screenTheme, setScreenTheme] = useState<ScreenTheme>("night");
 
   const inputRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
@@ -104,6 +107,12 @@ export default function Home() {
   const speakTokenRef = useRef(0);
 
   const entered = cloudEnabled ? Boolean(authUserId) : localEntered;
+
+  useEffect(() => {
+    const theme = readStoredTheme();
+    setScreenTheme(theme);
+    applyScreenTheme(theme);
+  }, []);
 
   useEffect(() => {
     try {
@@ -797,6 +806,10 @@ export default function Home() {
     await submitUserText(messageDraft);
   }
 
+  function handleThemeToggle() {
+    setScreenTheme((current) => toggleScreenTheme(current));
+  }
+
   function saveAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -861,6 +874,7 @@ export default function Home() {
 
     return (
       <main className="reader landing">
+        <ThemeToggle className="themeToggleFloating" onToggle={handleThemeToggle} theme={screenTheme} />
         <div className="outerHalo" />
         <div className="glowCore" />
         <section className="loginShell">
@@ -1045,6 +1059,7 @@ export default function Home() {
       <nav className="topbar">
         <div className="brandMark">i阅</div>
         <div className="topbarActions">
+          <ThemeToggle onToggle={handleThemeToggle} theme={screenTheme} />
           <button className="quotaPill" onClick={() => setModal("account")} type="button">
             {session.userApiKey ? "自带 API" : session.plan === "pro" ? "套餐用户" : `免费 ${session.trialRemaining}/${FREE_TRIAL_TURNS}`}
           </button>
