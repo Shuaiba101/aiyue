@@ -1216,7 +1216,7 @@ export default function Home() {
       {modal === "account" && (
         <section className="modal">
           <form className="panel accountPanel" onSubmit={saveAccount}>
-            <h2>账户</h2>
+            <h2>设置</h2>
             <div className="planStrip">
               <div>
                 <strong>{cloudEnabled ? (authEmail || "已登录") : "本地模式"}</strong>
@@ -1252,9 +1252,13 @@ export default function Home() {
             <label>高级：DeepSeek API Key（留空用平台额度）</label>
             <input name="userApiKey" defaultValue={session.userApiKey} placeholder="sk-..." />
 
-            <div className="actions">
-              <button onClick={() => setModal(null)} type="button">关闭</button>
-              <button type="submit">保存</button>
+            <div className="panelActions">
+              <button className="btnGhost" onClick={() => setModal(null)} type="button">
+                取消
+              </button>
+              <button className="btnPrimary" type="submit">
+                保存设置
+              </button>
             </div>
           </form>
         </section>

@@ -1077,6 +1077,46 @@ button {
   margin-top: 24px;
 }
 
+.panelActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 220, 170, 0.12);
+}
+
+.panelActions .btnGhost {
+  border: 1px solid rgba(255, 220, 170, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  padding: 11px 18px;
+  color: rgba(255, 238, 215, 0.72);
+  cursor: pointer;
+}
+
+.panelActions .btnPrimary {
+  border: 1px solid rgba(255, 220, 170, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 220, 170, 0.2);
+  padding: 11px 24px;
+  color: rgba(255, 248, 235, 0.98);
+  font-weight: 420;
+  cursor: pointer;
+  box-shadow: 0 0 22px rgba(220, 150, 70, 0.18);
+}
+
+.panelActions .btnGhost:hover {
+  border-color: rgba(255, 220, 170, 0.24);
+  background: rgba(255, 220, 170, 0.06);
+  color: rgba(255, 244, 224, 0.92);
+}
+
+.panelActions .btnPrimary:hover {
+  border-color: rgba(255, 220, 170, 0.42);
+  background: rgba(255, 220, 170, 0.28);
+}
+
 @media (max-width: 760px) {
   .hintDesktop {
     display: none;
@@ -1283,6 +1323,26 @@ button {
   .accountPanel,
   .paywallPanel {
     width: 100%;
+  }
+
+  .panelActions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    flex-direction: row-reverse;
+    margin-top: 20px;
+    padding-top: 16px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--panel) 72%, rgba(0, 0, 0, 0));
+  }
+
+  .panelActions .btnPrimary {
+    flex: 1;
+    min-height: 46px;
+  }
+
+  .panelActions .btnGhost {
+    min-height: 46px;
   }
 
   .switchRow {
@@ -1858,6 +1918,31 @@ html[data-theme="day"] .inputDock.closed {
 
 html[data-theme="day"] .inputDockHint {
   color: rgba(48, 40, 32, 0.68);
+}
+
+html[data-theme="day"] .panelActions {
+  border-top-color: rgba(120, 90, 60, 0.12);
+}
+
+html[data-theme="day"] .panelActions .btnGhost {
+  border-color: rgba(120, 90, 60, 0.18);
+  color: rgba(48, 40, 32, 0.68);
+}
+
+html[data-theme="day"] .panelActions .btnPrimary {
+  border-color: rgba(120, 90, 60, 0.28);
+  background: rgba(120, 90, 60, 0.12);
+  color: rgba(40, 32, 24, 0.94);
+  box-shadow: 0 4px 18px rgba(120, 90, 60, 0.12);
+}
+
+html[data-theme="day"] .panelActions .btnGhost:hover {
+  background: rgba(120, 90, 60, 0.06);
+  color: rgba(40, 32, 24, 0.88);
+}
+
+html[data-theme="day"] .panelActions .btnPrimary:hover {
+  background: rgba(120, 90, 60, 0.18);
 }
 
 html[data-theme="day"] .cornerBtn,
