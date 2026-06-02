@@ -862,6 +862,21 @@ export default function Home() {
     flash("设置已保存。");
   }
 
+  async function flushMemorySave() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    await saveMemory(memory, authUserId);
+    setModal(null);
+    flash("记忆已保存。");
+  }
+
+  function clearMemory() {
+    setMemory(defaultMemory());
+    flash("记忆已清空。");
+  }
+
   async function activateProPlan() {
     if (!MOCK_BILLING_ENABLED) {
       flash("套餐开通尚未开放，请填入自己的 DeepSeek Key 或联系内测。");
@@ -1178,7 +1193,7 @@ export default function Home() {
         <section className="modal">
           <div className="panel memoryPanel">
             <h2>心迹 · i阅 帮你记着</h2>
-            <p className="memoryLead">每一句触动、每一次陪读、每一条洞察——都会留下来，越聊越懂你。</p>
+            <p className="memoryLead">聊天时 i阅 会自动记下触动与轨迹；点「保存记忆」可立即同步到本机与云端。</p>
             {memory.reader_profile.name && (
               <div className="memoryItem"><strong>称呼</strong><br />{memory.reader_profile.name}</div>
             )}
@@ -1205,9 +1220,16 @@ export default function Home() {
                 })
               )}
             </div>
-            <div className="actions">
-              <button onClick={() => setMemory(defaultMemory())} type="button">清空</button>
-              <button onClick={() => setModal(null)} type="button">关闭</button>
+            <button className="btnTextDanger" onClick={clearMemory} type="button">
+              清空全部记忆
+            </button>
+            <div className="panelActions">
+              <button className="btnGhost" onClick={() => setModal(null)} type="button">
+                关闭
+              </button>
+              <button className="btnPrimary" onClick={() => void flushMemorySave()} type="button">
+                保存记忆
+              </button>
             </div>
           </div>
         </section>
