@@ -4,7 +4,12 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "i阅 · 有记忆的 AI 阅读陪伴",
-  description: "陪你读书。你读纸质书，i阅 陪着、记着、越来越懂你。"
+  description: "陪你读书。你读纸质书，i阅 陪着、记着、越来越懂你。",
+  icons: {
+    icon: [{ url: "/icon", type: "image/png", sizes: "32x32" }],
+    shortcut: "/icon",
+    apple: [{ url: "/apple-icon", type: "image/png", sizes: "180x180" }]
+  }
 };
 
 export const viewport: Viewport = {
