@@ -22,6 +22,7 @@ import {
   getBookSessionMessages,
   hasBookHistory,
   inferReadingPhase,
+  isMinimalBookEntry,
   recordConversation,
   shouldConsolidate,
   shouldSearch
@@ -46,6 +47,7 @@ import { sanitizeAssistantReply } from "@/lib/core";
 import { readJsonResponse } from "@/lib/read-json-response";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { applyScreenTheme, readStoredTheme, toggleScreenTheme, type ScreenTheme } from "@/lib/theme";
+import { isBookBackgroundRequest } from "@/lib/tavily";
 
 type UserSession = {
   name: string;
@@ -60,10 +62,14 @@ type AuthTab = "invite" | "apply" | "login";
 const SESSION_KEY = "iyue_web_session_v1";
 const MODE: ModeKey = "fireplace";
 const GREETING = "今天你想读什么书？书在你手里，有想聊的随时发给我。";
+/** 语音朗读暂关，当前仅输出文字。 */
+const TTS_FEATURE_ENABLED = false;
+/** 仅开发/内测环境可模拟购买套餐，生产环境勿开启。 */
+const MOCK_BILLING_ENABLED = process.env.NEXT_PUBLIC_ALLOW_MOCK_BILLING === "true";
 
 function defaultSession(email: string): UserSession {
   const name = (email || "").split("@")[0] || "读者";
-  return { name, email, plan: "trial", trialRemaining: FREE_TRIAL_TURNS, userApiKey: "", ttsEnabled: true };
+  return { name, email, plan: "trial", trialRemaining: FREE_TRIAL_TURNS, userApiKey: "", ttsEnabled: false };
 }
 
 export default function Home() {
@@ -120,7 +126,7 @@ export default function Home() {
         setSession({
           ...defaultSession(raw.email || ""),
           ...raw,
-          ttsEnabled: raw.ttsEnabled !== false
+          ttsEnabled: TTS_FEATURE_ENABLED && raw.ttsEnabled === true
         });
       }
     } catch {
@@ -505,7 +511,7 @@ export default function Home() {
   function deliver(text: string) {
     setIsThinking(false);
     const clean = sanitizeAssistantReply(text);
-    const useTts = session?.ttsEnabled !== false && Boolean(clean);
+    const useTts = TTS_FEATURE_ENABLED && session?.ttsEnabled !== false && Boolean(clean);
     const token = ++speakTokenRef.current;
 
     if (!useTts) {
@@ -551,10 +557,12 @@ export default function Home() {
   function commitAndSave(
     userText: string,
     assistantText: string,
-    completed: ChatMessage[]
+    completed: ChatMessage[],
+    bookTitle?: string
   ) {
+    const activeBook = bookTitle || book;
     setMemory((current) => {
-      const next = commitTurn(current, { book, mode, userText, assistantText, messages: completed });
+      const next = commitTurn(current, { book: activeBook, mode, userText, assistantText, messages: completed });
       void saveMemory(next, authUserId);
       void runConsolidation(next);
       return next;
@@ -596,7 +604,7 @@ export default function Home() {
   }
 
   // 进入一本书：有保存的对话则恢复；否则让 i阅 主动打招呼。
-  async function openWithBook(title: string) {
+  async function openWithBook(title: string, options?: { followUpText?: string }) {
     setBook(title);
     setMessageDraft("");
     setInputOpen(false);
@@ -604,8 +612,6 @@ export default function Home() {
     const priorMessages = getBookSessionMessages(memory, title);
     if (priorMessages.length > 0) {
       setMessages(priorMessages);
-      const lastLine = priorMessages[priorMessages.length - 1]?.content || "";
-      setSubtitle(lastLine);
       setIsThinking(false);
       setMemory((current) => {
         const next = structuredClone(current);
@@ -614,6 +620,17 @@ export default function Home() {
         }
         return next;
       });
+
+      const followUp = options?.followUpText?.trim();
+      if (followUp && !isMinimalBookEntry(followUp, title)) {
+        flash(`好，接着聊《${title}》。`);
+        await submitUserText(followUp, { bookOverride: title, messagesOverride: priorMessages });
+        return;
+      }
+
+      const hint = buildWelcomeBackHint(memory) || `接着读《${title}》。书在你手里，有想聊的随时发。`;
+      setSubtitle(hint);
+      setInputOpen(true);
       flash(`接着聊《${title}》。`);
       return;
     }
@@ -701,12 +718,13 @@ export default function Home() {
     }
 
     if (intent.action === "continue") {
-      flash(`好，接着读《${intent.book}》。`);
-      await openWithBook(intent.book);
+      const followUp = isMinimalBookEntry(text, intent.book) ? undefined : text;
+      await openWithBook(intent.book, { followUpText: followUp });
       return;
     }
     if (intent.action === "open") {
-      await openWithBook(intent.book);
+      const followUp = isMinimalBookEntry(text, intent.book) ? undefined : text;
+      await openWithBook(intent.book, { followUpText: followUp });
       return;
     }
     if (intent.action === "prompt_new") {
@@ -719,15 +737,28 @@ export default function Home() {
     await openWithBook(text);
   }
 
-  async function submitUserText(rawText: string) {
+  async function submitUserText(
+    rawText: string,
+    ctx?: { bookOverride?: string; messagesOverride?: ChatMessage[] }
+  ) {
     const text = rawText.trim();
     if (!text || !session) return;
-    unlockAudioPlayback();
+    if (TTS_FEATURE_ENABLED) unlockAudioPlayback();
+
+    const activeBook = ctx?.bookOverride ?? book;
+    const baseMessages = ctx?.messagesOverride ?? messages;
 
     // 还没选书 → 先理解意图（继续上一本 / 换书 / 报书名），再进入阅读。
-    if (!book) {
+    if (!activeBook) {
       await handleBookEntry(text);
       return;
+    }
+
+    if (ctx?.bookOverride && ctx.bookOverride !== book) {
+      setBook(ctx.bookOverride);
+    }
+    if (ctx?.messagesOverride) {
+      setMessages(ctx.messagesOverride);
     }
 
     if (!session.userApiKey && session.plan !== "pro" && session.trialRemaining <= 0) {
@@ -736,21 +767,22 @@ export default function Home() {
     }
 
     const userMessage: ChatMessage = { role: "user", content: text };
-    const nextMessages = [...messages, userMessage];
+    const nextMessages = [...baseMessages, userMessage];
     setMessages(nextMessages);
     setSubtitle(text);
     setMessageDraft("");
     setInputOpen(false);
     setIsThinking(true);
 
-    const phase = inferReadingPhase(memory, book, messages, text);
+    const phase = inferReadingPhase(memory, activeBook, baseMessages, text);
     const stance = detectReplyStance(text);
     const needsSearch = shouldSearch(text);
     const turnCompanionPrompt = buildTurnCompanionPrompt({
       phase,
       stance,
       searchUsed: needsSearch,
-      trajectory: phase === "reflecting" ? buildBookTrajectory(memory, book) : ""
+      backgroundRequest: isBookBackgroundRequest(text),
+      trajectory: phase === "reflecting" ? buildBookTrajectory(memory, activeBook) : ""
     });
 
     try {
@@ -758,19 +790,19 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          book,
+          book: activeBook,
           mode,
           needsSearch,
           messages: nextMessages.slice(-10),
           userApiKey: session.userApiKey || undefined,
-          systemPrompt: buildSystemPrompt(memory, book, mode),
+          systemPrompt: buildSystemPrompt(memory, activeBook, mode),
           turnCompanionPrompt
         })
       });
       const data = await readJsonResponse(response);
       if (response.status === 402) {
         handleQuotaExhausted();
-        setMessages(messages);
+        setMessages(baseMessages);
         return;
       }
       if (!response.ok) {
@@ -784,7 +816,7 @@ export default function Home() {
       const completed = [...nextMessages, assistantMessage];
       setMessages(completed);
       void deliver(reply);
-      commitAndSave(text, reply, completed);
+      commitAndSave(text, reply, completed, activeBook);
       if (data.usedSearch) flash("查了一点资料。");
       if (phase === "reflecting") flash("帮你把和这本书的轨迹记下了。");
       if (data.demo) flash("演示回应：配置 DeepSeek Key 后会变成真实 AI。");
@@ -813,7 +845,7 @@ export default function Home() {
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") || "").trim() || session?.name || "读者";
     const userApiKey = String(form.get("userApiKey") || "").trim();
-    const ttsEnabled = form.get("ttsEnabled") === "on";
+    const ttsEnabled = TTS_FEATURE_ENABLED && form.get("ttsEnabled") === "on";
     setSession((current) => (current ? { ...current, name, userApiKey, ttsEnabled } : current));
     if (!ttsEnabled) {
       stopSpeaking();
@@ -831,6 +863,10 @@ export default function Home() {
   }
 
   async function activateProPlan() {
+    if (!MOCK_BILLING_ENABLED) {
+      flash("套餐开通尚未开放，请填入自己的 DeepSeek Key 或联系内测。");
+      return;
+    }
     if (cloudEnabled && authUserId) {
       try {
         const response = await fetch("/api/quota/activate", { method: "POST" });
@@ -1076,12 +1112,10 @@ export default function Home() {
         </div>
       )}
       <div className="bottomHint">
-        {isSpeaking ? (
+        {TTS_FEATURE_ENABLED && isSpeaking ? (
           "i阅 在说话…"
         ) : isThinking ? (
           "i阅 在想…"
-        ) : session.ttsEnabled === false ? (
-          "文字模式 · 语音已关闭"
         ) : !book ? (
           <>
             <span className="hintDesktop">输入书名，按 Enter 开始</span>
@@ -1098,7 +1132,7 @@ export default function Home() {
       {!book && !isThinking && <div className="breathCue" aria-hidden="true" />}
 
       <section
-        className={`inputDock ${inputOpen ? "open" : ""}`}
+        className={`inputDock ${inputOpen ? "open" : ""} ${!inputOpen ? "closed" : ""}`}
         onClick={() => {
           unlockAudioPlayback();
           setInputOpen(true);
@@ -1108,6 +1142,9 @@ export default function Home() {
         tabIndex={-1}
         aria-label="打开输入框"
       >
+        {!inputOpen && (
+          <div className="inputDockHint">{book ? "轻触这里，聊点什么…" : "轻触这里，输入书名"}</div>
+        )}
         <div className="inputLine" />
         <form
           onSubmit={sendMessage}
@@ -1127,8 +1164,12 @@ export default function Home() {
       </section>
 
       <div className="cornerActions">
-        <button onClick={() => setModal("memory")} title="记忆" type="button">◇</button>
-        <button onClick={() => setModal("account")} title="账户" type="button">¤</button>
+        <button className="cornerBtn" onClick={() => setModal("memory")} type="button">
+          记忆
+        </button>
+        <button className="cornerBtn" onClick={() => setModal("account")} type="button">
+          设置
+        </button>
       </div>
 
       {toast && <div className="toast">{toast}</div>}
@@ -1188,19 +1229,25 @@ export default function Home() {
                 <strong>{session.plan === "pro" ? "i阅套餐" : "免费试读"}</strong>
                 <span>{session.userApiKey ? "当前使用自己的 API Key" : session.plan === "pro" ? "平台额度可用" : `还剩 ${session.trialRemaining} 轮`}</span>
               </div>
-              <button onClick={activateProPlan} type="button">模拟购买套餐</button>
+              {MOCK_BILLING_ENABLED ? (
+                <button onClick={activateProPlan} type="button">模拟购买套餐</button>
+              ) : null}
             </div>
 
             <label>称呼</label>
             <input name="name" defaultValue={session.name} />
 
-            <label className="switchRow">
-              <span>
-                <strong>语音朗读</strong>
-                <small>用 MiMo 把 i阅 的回复读出来（炉边陪读感）</small>
-              </span>
-              <input defaultChecked={session.ttsEnabled !== false} name="ttsEnabled" type="checkbox" />
-            </label>
+            {!TTS_FEATURE_ENABLED ? (
+              <p className="loginHint">语音朗读暂关闭，当前仅文字陪伴。</p>
+            ) : (
+              <label className="switchRow">
+                <span>
+                  <strong>语音朗读</strong>
+                  <small>用 MiMo 把 i阅 的回复读出来（炉边陪读感）</small>
+                </span>
+                <input defaultChecked={session.ttsEnabled === true} name="ttsEnabled" type="checkbox" />
+              </label>
+            )}
 
             <label>高级：DeepSeek API Key（留空用平台额度）</label>
             <input name="userApiKey" defaultValue={session.userApiKey} placeholder="sk-..." />
@@ -1219,13 +1266,15 @@ export default function Home() {
             <h2>今晚还想继续读吗？</h2>
             <p>试读额度用完了。i阅 记得你读过的书、聊过的话——开通月读，继续陪你读；或填入自己的 DeepSeek Key。</p>
             <div className="priceGrid">
-              <button onClick={activateProPlan} type="button">
-                <strong>开通套餐</strong>
-                <span>模拟购买，立即继续读</span>
-              </button>
+              {MOCK_BILLING_ENABLED ? (
+                <button onClick={activateProPlan} type="button">
+                  <strong>开通套餐</strong>
+                  <span>模拟购买，立即继续读</span>
+                </button>
+              ) : null}
               <button onClick={() => setModal("account")} type="button">
                 <strong>使用自己的 API</strong>
-                <span>在账户里填写 Key</span>
+                <span>在设置里填写 DeepSeek Key</span>
               </button>
             </div>
             <div className="actions">

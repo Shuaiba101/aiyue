@@ -84,6 +84,7 @@ export function buildTurnCompanionPrompt(input: {
   stance: "hold" | "explore" | "deepen";
   searchUsed: boolean;
   trajectory?: string;
+  backgroundRequest?: boolean;
 }): string;
 export function sanitizeAssistantReply(text: string): string;
 export function demoReply(book: string, userText: string): string;
@@ -101,6 +102,7 @@ export function resolveBookEntryIntent(
   | { action: "open"; book: string }
   | { action: "prompt_new" }
   | { action: "unclear"; lastBook: string; raw: string };
+export function isMinimalBookEntry(text: string, bookTitle: string): boolean;
 export function buildNewBookGreetingUserMessage(memory: Memory, book: string): string;
 export function buildReturnGreetingUserMessage(memory: Memory, book: string): string;
 export function fallbackReturnGreeting(memory: Memory, book: string): string;

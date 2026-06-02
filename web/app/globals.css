@@ -669,26 +669,59 @@ button {
   left: 9%;
   bottom: 7.5%;
   z-index: 12;
-  width: 300px;
+  width: min(360px, 92vw);
   cursor: text;
+}
+
+.inputDock.closed {
+  padding: 12px 16px 10px;
+  border: 1px solid rgba(255, 220, 170, 0.18);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28), 0 0 24px rgba(220, 150, 70, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.inputDockHint {
+  margin-bottom: 10px;
+  color: rgba(255, 238, 215, 0.72);
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  pointer-events: none;
 }
 
 .inputDock:not(.open) .inputLine {
   cursor: pointer;
+  width: 100%;
+  opacity: 0.85;
 }
 
 .inputLine {
   width: 84px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(255, 220, 170, 0.58), transparent);
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 220, 170, 0.72), rgba(255, 220, 170, 0.18));
   box-shadow: 0 0 18px rgba(220, 150, 70, 0.32);
   opacity: 0.72;
   transition: width 0.25s ease, opacity 0.25s ease;
+  border-radius: 999px;
+}
+
+.inputDock.open {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.inputDock.open .inputDockHint {
+  display: none;
 }
 
 .inputDock.open .inputLine {
-  width: 300px;
-  opacity: 0.25;
+  width: 100%;
+  opacity: 0.35;
 }
 
 .inputDock form {
@@ -794,21 +827,26 @@ button {
   bottom: 22px;
   z-index: 16;
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 
-.cornerActions button {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  background: transparent;
-  color: var(--warm);
+.cornerBtn {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 220, 170, 0.16);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.34);
+  color: rgba(255, 238, 215, 0.78);
+  font-size: 13px;
+  letter-spacing: 0.06em;
   cursor: pointer;
-  opacity: 0.28;
+  backdrop-filter: blur(8px);
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
-.cornerActions button:hover {
-  opacity: 0.68;
+.cornerBtn:hover {
+  color: rgba(255, 244, 224, 0.96);
+  border-color: rgba(255, 220, 170, 0.28);
+  background: rgba(255, 220, 170, 0.1);
 }
 
 .toast {
@@ -1180,22 +1218,27 @@ button {
     bottom: max(12px, env(safe-area-inset-bottom));
     width: min(92vw, 480px);
     transform: translateX(-50%);
-    padding: 8px 0;
+  }
+
+  .inputDock.closed {
+    padding: 14px 18px 12px;
+  }
+
+  .inputDockHint {
+    font-size: 15px;
+    text-align: center;
+    width: 100%;
   }
 
   .inputDock:not(.open) {
-    min-height: 44px;
+    min-height: 52px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: flex-end;
   }
 
   .inputLine {
-    width: 100px;
-  }
-
-  .inputDock.open .inputLine {
     width: 100%;
   }
 
@@ -1210,11 +1253,9 @@ button {
     gap: 8px;
   }
 
-  .cornerActions button {
-    width: 44px;
-    height: 44px;
-    opacity: 0.42;
-    font-size: 18px;
+  .cornerBtn {
+    padding: 11px 14px;
+    font-size: 14px;
   }
 
   .toast {
@@ -1809,8 +1850,27 @@ html[data-theme="day"] .inputDock input {
   background: rgba(255, 252, 246, 0.82);
 }
 
+html[data-theme="day"] .inputDock.closed {
+  border-color: rgba(120, 90, 60, 0.18);
+  background: rgba(255, 252, 246, 0.88);
+  box-shadow: 0 8px 28px rgba(120, 90, 60, 0.1);
+}
+
+html[data-theme="day"] .inputDockHint {
+  color: rgba(48, 40, 32, 0.68);
+}
+
+html[data-theme="day"] .cornerBtn,
 html[data-theme="day"] .cornerActions button {
+  border-color: rgba(120, 90, 60, 0.18);
+  background: rgba(255, 252, 246, 0.82);
   color: rgba(48, 40, 32, 0.72);
+}
+
+html[data-theme="day"] .cornerBtn:hover {
+  color: rgba(40, 32, 24, 0.92);
+  border-color: rgba(120, 90, 60, 0.3);
+  background: rgba(255, 252, 246, 0.96);
 }
 
 html[data-theme="day"] .toast {

@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth/server";
 import { demoReply, sanitizeAssistantReply } from "@/lib/core";
 import { checkPlatformAccess, consumePlatformTurn } from "@/lib/quota/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { tavilySearch } from "@/lib/tavily";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -20,30 +21,9 @@ const requestSchema = z.object({
   })).min(1)
 });
 
-async function tavilySearch(book: string, query: string) {
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) return "";
-
-  const response = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query: `${book} ${query}`,
-      search_depth: "basic",
-      max_results: 3,
-      include_answer: false
-    })
-  });
-
-  if (!response.ok) return "";
-  const data = await response.json();
-  return (data.results || [])
-    .slice(0, 3)
-    .map((item: { title?: string; content?: string; url?: string }, index: number) => {
-      return `[搜索结果${index + 1}] ${item.title || ""}\n${item.content || ""}\n${item.url || ""}`;
-    })
-    .join("\n\n");
+async function runTavilySearch(book: string, query: string) {
+  const { context } = await tavilySearch(book, query);
+  return context;
 }
 
 export async function POST(request: Request) {
@@ -90,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content || "";
-  const searchContext = input.needsSearch ? await tavilySearch(input.book, lastUserMessage) : "";
+  const searchContext = input.needsSearch ? await runTavilySearch(input.book, lastUserMessage) : "";
   const turnPrompt =
     input.turnCompanionPrompt?.trim() ||
     `【本轮陪伴】

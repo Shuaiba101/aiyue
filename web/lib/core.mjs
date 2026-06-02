@@ -180,10 +180,14 @@ export function buildBookTrajectory(memory, book, maxItems = 10) {
 }
 
 /** 每轮对话的伴随指令（阶段 + 姿态 + 是否联网）。 */
-export function buildTurnCompanionPrompt({ phase, stance, searchUsed, trajectory = "" }) {
+export function buildTurnCompanionPrompt({ phase, stance, searchUsed, trajectory = "", backgroundRequest = false }) {
   const phaseGuide = {
-    opening: "刚翻开或刚定下书名：帮他进入状态，可问一个轻松的小问题；别剧透、别介绍全书。",
-    reading: "读的过程中：陪他消化卡点，用提问推他的思考，不替他想。",
+    opening: backgroundRequest && searchUsed
+      ? "刚定下书名且读者想了解背景：用搜索到的资料给 1-2 句入场信息（作者、主题方向即可），不剧透、不代读；然后轻轻把他引回「书在你手里」。"
+      : "刚翻开或刚定下书名：帮他进入状态，可问一个轻松的小问题；别剧透、别介绍全书。",
+    reading: backgroundRequest && searchUsed
+      ? "读者想了解背景：可简短交代查到的作者/背景/主题，2-3 句即止，不剧透；仍把他引回自己读。"
+      : "读的过程中：陪他消化卡点，用提问推他的思考，不替他想。",
     reflecting:
       "读者表示读完了或要收尾：不做全书总结、不讲中心思想；基于你们聊过的内容，抛 1 个只有「读过且聊过」才答得上的私人化回望问题，帮他内化。"
   };
@@ -358,6 +362,19 @@ function isContinueReadingReply(text) {
 
 function isSwitchBookReply(text) {
   return /换一本|换本书|读别的|另一本|不想读这|不读这|换个书/i.test(String(text || ""));
+}
+
+/** 仅报书名或极短确认，进入书后不需要再把这句话当首轮对话。 */
+export function isMinimalBookEntry(text, bookTitle) {
+  const clean = String(text || "").trim();
+  const book = String(bookTitle || "").trim();
+  if (!clean) return true;
+  if (!book) return clean.length <= 12;
+  if (clean === book || clean === `《${book}》`) return true;
+  if (looksLikeConversationalReply(clean)) return false;
+  if (clean.includes(book) && clean.length <= book.length + 10) return true;
+  if (/^(继续|接着读|接着聊|好|是|嗯|行|可以|要|读吧|读啊|那就)/.test(clean) && clean.length <= 16) return true;
+  return false;
 }
 
 /**
