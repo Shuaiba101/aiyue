@@ -43,9 +43,7 @@ button {
   inset: 0;
   overflow: hidden;
   height: 100dvh;
-  background:
-    radial-gradient(circle at 50% 46%, rgba(70, 38, 16, 0.22), transparent 48%),
-    #000;
+  background: transparent;
 }
 
 .reader.landing {
@@ -65,6 +63,7 @@ button {
   border-radius: 999px;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  z-index: 2;
 }
 
 .outerHalo {
@@ -1509,7 +1508,8 @@ button {
   position: relative;
   min-height: 100vh;
   color: var(--warm);
-  background: #000;
+  background: transparent;
+  overflow-x: hidden;
 }
 
 .siteBreath {
@@ -1792,6 +1792,397 @@ button {
   color: rgba(255, 240, 215, 0.65);
 }
 
+/* —— 动态场景背景：夜间炉边 · 日间海滩 —— */
+.sceneBg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sceneNight,
+.sceneDay {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.9s ease, visibility 0.9s ease;
+}
+
+.sceneDay {
+  opacity: 0;
+  visibility: hidden;
+}
+
+html[data-theme="day"] .sceneNight {
+  opacity: 0;
+  visibility: hidden;
+}
+
+html[data-theme="day"] .sceneDay {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sceneVignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 40%, transparent 35%, rgba(0, 0, 0, 0.38) 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.15), transparent 28%, rgba(0, 0, 0, 0.35));
+  opacity: 0.55;
+}
+
+html[data-theme="day"] .sceneVignette {
+  background:
+    radial-gradient(ellipse at 50% 30%, transparent 40%, rgba(80, 120, 160, 0.12) 100%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.08), transparent 35%, rgba(120, 90, 60, 0.08));
+  opacity: 0.7;
+}
+
+/* 夜间：星空 + 树林 + 篝火 */
+.sceneNightSky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, #04060e 0%, #0a1220 38%, #120e08 72%, #0a0604 100%);
+}
+
+.sceneNightStars {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.75), transparent),
+    radial-gradient(1px 1px at 28% 12%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1.5px 1.5px at 44% 22%, rgba(255, 248, 230, 0.65), transparent),
+    radial-gradient(1px 1px at 62% 10%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 78% 16%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 88% 24%, rgba(255, 248, 220, 0.55), transparent),
+    radial-gradient(1px 1px at 18% 32%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 52% 8%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 92% 8%, rgba(255, 255, 255, 0.4), transparent);
+  animation: starTwinkle 6s ease-in-out infinite alternate;
+}
+
+@keyframes starTwinkle {
+  0% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+
+.sceneNightWoods {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  background:
+    radial-gradient(ellipse 120px 180px at 8% 100%, rgba(0, 0, 0, 0.95), transparent 70%),
+    radial-gradient(ellipse 100px 160px at 22% 100%, rgba(0, 0, 0, 0.9), transparent 68%),
+    radial-gradient(ellipse 140px 200px at 88% 100%, rgba(0, 0, 0, 0.95), transparent 70%),
+    radial-gradient(ellipse 110px 170px at 72% 100%, rgba(0, 0, 0, 0.88), transparent 66%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(8, 6, 4, 0.5) 45%, transparent 100%);
+}
+
+.sceneCampfire {
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  width: min(220px, 42vw);
+  height: min(160px, 28vw);
+  transform: translateX(-50%);
+}
+
+.sceneLogs {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 72%;
+  height: 18%;
+  transform: translateX(-50%);
+  border-radius: 40% 40% 8px 8px;
+  background: linear-gradient(to bottom, #2a1810, #120a06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.sceneFireGlow {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  width: 280%;
+  height: 220%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 75%, rgba(255, 140, 40, 0.42), rgba(220, 90, 20, 0.18) 38%, transparent 68%);
+  animation: fireGlowPulse 2.4s ease-in-out infinite;
+}
+
+.sceneFireCore {
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  width: 55%;
+  height: 55%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 45% 45%;
+  background: radial-gradient(circle at 50% 70%, #fff4c8 0%, #ffb040 22%, #ff6018 52%, transparent 78%);
+  filter: blur(2px);
+  animation: fireCoreFlicker 0.55s ease-in-out infinite alternate;
+}
+
+.sceneFireFlame {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 38%;
+  height: 62%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 42% 42%;
+  background: radial-gradient(circle at 50% 80%, rgba(255, 220, 120, 0.95), rgba(255, 120, 30, 0.7) 45%, transparent 75%);
+  filter: blur(1px);
+}
+
+.sceneFireFlameA {
+  animation: flameDanceA 1.1s ease-in-out infinite alternate;
+}
+
+.sceneFireFlameB {
+  width: 28%;
+  height: 48%;
+  opacity: 0.75;
+  animation: flameDanceB 0.85s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes fireGlowPulse {
+  0%, 100% { opacity: 0.72; transform: translateX(-50%) scale(0.96); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+}
+
+@keyframes fireCoreFlicker {
+  0% { opacity: 0.82; transform: translateX(-50%) scale(0.94) skewX(-2deg); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1.06) skewX(2deg); }
+}
+
+@keyframes flameDanceA {
+  0% { transform: translateX(-52%) scale(0.92) rotate(-3deg); }
+  100% { transform: translateX(-48%) scale(1.08) rotate(4deg); }
+}
+
+@keyframes flameDanceB {
+  0% { transform: translateX(-48%) scale(0.88) rotate(2deg); }
+  100% { transform: translateX(-52%) scale(1.05) rotate(-3deg); }
+}
+
+.sceneEmbers {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 120px;
+  height: 180px;
+  transform: translateX(-50%);
+}
+
+.sceneEmber {
+  position: absolute;
+  left: calc(50% + (var(--i) - 5) * 9px);
+  bottom: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 200, 100, 0.9);
+  box-shadow: 0 0 8px rgba(255, 160, 60, 0.8);
+  animation: emberRise 3.6s ease-out infinite;
+  animation-delay: calc(var(--i) * 0.38s);
+  opacity: 0;
+}
+
+@keyframes emberRise {
+  0% { opacity: 0; transform: translateY(0) translateX(0) scale(0.6); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-140px) translateX(calc((var(--i) - 5) * 6px)) scale(0.2); }
+}
+
+/* 日间：天空 + 海 + 沙滩 */
+.sceneDaySky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, #5eb8e8 0%, #8fd0ef 32%, #b8e4f8 58%, #dceef8 100%);
+}
+
+.sceneSun {
+  position: absolute;
+  top: 12%;
+  right: 18%;
+  width: min(72px, 14vw);
+  height: min(72px, 14vw);
+  border-radius: 999px;
+  background: radial-gradient(circle, #fff8d8 0%, #ffe680 45%, rgba(255, 220, 100, 0.2) 72%);
+  box-shadow: 0 0 48px rgba(255, 220, 120, 0.55);
+  animation: sunPulse 5s ease-in-out infinite;
+}
+
+@keyframes sunPulse {
+  0%, 100% { transform: scale(0.96); opacity: 0.92; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+
+.sceneCloud {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  filter: blur(1px);
+  opacity: 0.88;
+}
+
+.sceneCloudA {
+  top: 16%;
+  left: -12%;
+  width: 140px;
+  height: 42px;
+  animation: cloudDriftA 48s linear infinite;
+  box-shadow:
+    32px 8px 0 -4px rgba(255, 255, 255, 0.82),
+    68px 4px 0 -8px rgba(255, 255, 255, 0.75);
+}
+
+.sceneCloudB {
+  top: 24%;
+  left: -20%;
+  width: 110px;
+  height: 34px;
+  opacity: 0.72;
+  animation: cloudDriftB 62s linear infinite;
+  box-shadow: 28px 6px 0 -6px rgba(255, 255, 255, 0.78);
+}
+
+@keyframes cloudDriftA {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(100vw + 180px)); }
+}
+
+@keyframes cloudDriftB {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(100vw + 220px)); }
+}
+
+.sceneOcean {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18%;
+  height: 38%;
+  background: linear-gradient(to bottom, #3d96c8 0%, #2a7fb5 55%, #1e6a9a 100%);
+  overflow: hidden;
+}
+
+.sceneWave {
+  position: absolute;
+  left: -8%;
+  width: 116%;
+  height: 48px;
+  border-radius: 45% 55% 42% 58%;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.sceneWaveFar {
+  top: 18%;
+  opacity: 0.35;
+  animation: waveRoll 9s ease-in-out infinite;
+}
+
+.sceneWaveMid {
+  top: 42%;
+  opacity: 0.5;
+  animation: waveRoll 6.5s ease-in-out infinite reverse;
+}
+
+.sceneWaveNear {
+  top: 68%;
+  opacity: 0.65;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.2);
+  animation: waveRoll 4.8s ease-in-out infinite;
+}
+
+@keyframes waveRoll {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  50% { transform: translateX(-3%) translateY(-5px); }
+}
+
+.sceneShimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.12) 48%,
+    transparent 62%
+  );
+  background-size: 200% 100%;
+  animation: seaShimmer 7s ease-in-out infinite;
+}
+
+@keyframes seaShimmer {
+  0%, 100% { background-position: 120% 0; }
+  50% { background-position: -20% 0; }
+}
+
+.sceneBeach {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 20%;
+  background: linear-gradient(to bottom, #e8d8b8 0%, #dcc8a0 55%, #cfb88a 100%);
+}
+
+.sceneFoam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18%;
+  height: 12px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.55), transparent);
+  animation: foamWash 4s ease-in-out infinite;
+}
+
+@keyframes foamWash {
+  0%, 100% { opacity: 0.45; transform: translateY(0); }
+  50% { opacity: 0.85; transform: translateY(-3px); }
+}
+
+@media (max-width: 760px) {
+  .sceneCampfire {
+    bottom: 10%;
+  }
+
+  .sceneOcean {
+    bottom: 16%;
+    height: 40%;
+  }
+
+  .sceneBeach {
+    height: 18%;
+  }
+
+  .sceneSun {
+    top: 10%;
+    right: 12%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sceneNightStars,
+  .sceneFireGlow,
+  .sceneFireCore,
+  .sceneFireFlame,
+  .sceneEmber,
+  .sceneSun,
+  .sceneCloudA,
+  .sceneCloudB,
+  .sceneWave,
+  .sceneShimmer,
+  .sceneFoam {
+    animation: none !important;
+  }
+}
+
 /* —— 日间模式 —— */
 html[data-theme="day"] {
   color-scheme: light;
@@ -1810,9 +2201,7 @@ html[data-theme="day"] body {
 }
 
 html[data-theme="day"] .reader {
-  background:
-    radial-gradient(circle at 50% 46%, rgba(220, 180, 120, 0.32), transparent 50%),
-    #f6f1e8;
+  background: transparent;
 }
 
 html[data-theme="day"] .outerHalo {

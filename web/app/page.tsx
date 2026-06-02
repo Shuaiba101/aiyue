@@ -1,12 +1,10 @@
 import Link from "next/link";
+import { SceneBackground } from "@/components/scene-background";
 
 export default function HomePage() {
   return (
     <main className="site">
-      <div className="siteBreath" aria-hidden="true">
-        <div className="outerHalo" />
-        <div className="glowCore" />
-      </div>
+      <SceneBackground />
 
       <header className="siteNav">
         <div className="siteBrand">i阅</div>

@@ -46,6 +46,7 @@ import {
 import { sanitizeAssistantReply } from "@/lib/core";
 import { readJsonResponse } from "@/lib/read-json-response";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SceneBackground } from "@/components/scene-background";
 import { applyScreenTheme, readStoredTheme, toggleScreenTheme, type ScreenTheme } from "@/lib/theme";
 import { isBookBackgroundRequest } from "@/lib/tavily";
 
@@ -923,6 +924,7 @@ export default function Home() {
 
     return (
       <main className="reader landing">
+        <SceneBackground />
         <ThemeToggle className="themeToggleFloating" onToggle={handleThemeToggle} theme={screenTheme} />
         <div className="outerHalo" />
         <div className="glowCore" />
@@ -1093,6 +1095,7 @@ export default function Home() {
   if (!session || (entered && !memoryReady)) {
     return (
       <main className="reader">
+        <SceneBackground />
         <div className="outerHalo" />
         <div className="glowCore" />
       </main>
@@ -1102,6 +1105,7 @@ export default function Home() {
   // ③ 进入即对话 + 阅读陪伴
   return (
     <main className={`reader ${isThinking ? "thinking" : ""} ${isSpeaking ? "speaking" : ""} ${!book && !isThinking ? "invite" : ""}`} onKeyDown={handleKeyDown} tabIndex={-1}>
+      <SceneBackground />
       <div className="outerHalo" />
       <div className={`glowCore ${!book && !isThinking ? "invitePulse" : ""}`} />
 
