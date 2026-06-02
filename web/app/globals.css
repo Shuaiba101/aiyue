@@ -68,38 +68,38 @@ button {
 }
 
 .outerHalo {
-  width: min(60vw, 760px);
-  height: min(60vw, 760px);
-  min-width: 420px;
-  min-height: 420px;
-  background: radial-gradient(circle, rgba(200, 140, 80, 0.06), rgba(140, 80, 40, 0.01) 56%, transparent 72%);
-  filter: blur(12px);
-  animation: outerBreath 14s ease-in-out infinite;
+  width: min(68vw, 820px);
+  height: min(68vw, 820px);
+  min-width: 460px;
+  min-height: 460px;
+  background: radial-gradient(circle, rgba(220, 160, 90, 0.14), rgba(170, 110, 50, 0.05) 52%, transparent 70%);
+  filter: blur(10px);
+  animation: outerBreath 12s ease-in-out infinite;
 }
 
 .glowCore {
-  width: min(38vw, 510px);
-  height: min(38vw, 510px);
-  min-width: 260px;
-  min-height: 260px;
-  background: radial-gradient(circle, rgba(220, 170, 100, 0.4), rgba(190, 140, 70, 0.18) 34%, rgba(150, 100, 40, 0.06) 58%, transparent 75%);
-  filter: blur(20px);
-  animation: coreBreath 10s ease-in-out infinite, emberShift 16s ease-in-out infinite;
+  width: min(42vw, 540px);
+  height: min(42vw, 540px);
+  min-width: 280px;
+  min-height: 280px;
+  background: radial-gradient(circle, rgba(255, 200, 120, 0.62), rgba(220, 160, 85, 0.32) 32%, rgba(180, 120, 50, 0.12) 56%, transparent 74%);
+  filter: blur(16px);
+  animation: coreBreath 8s ease-in-out infinite, emberShift 14s ease-in-out infinite;
 }
 
 @keyframes outerBreath {
-  0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.96); }
-  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.04); }
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(0.92); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
 }
 
 @keyframes coreBreath {
-  0%, 100% { opacity: 0.25; transform: translate(-50%, -50%) scale(0.93); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  0%, 100% { opacity: 0.48; transform: translate(-50%, -50%) scale(0.88); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
 }
 
 @keyframes emberShift {
-  0%, 100% { filter: blur(20px) hue-rotate(-3deg); }
-  50% { filter: blur(23px) hue-rotate(3deg); }
+  0%, 100% { filter: blur(16px) hue-rotate(-4deg); }
+  50% { filter: blur(20px) hue-rotate(5deg); }
 }
 
 .mode-desk {
@@ -1418,11 +1418,21 @@ button {
 
 /* —— 选书前的呼吸式邀请 —— */
 .reader.invite .outerHalo {
-  animation: outerBreath 8s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(240, 180, 100, 0.22), rgba(190, 130, 60, 0.08) 50%, transparent 68%);
+  animation: outerBreath 6s ease-in-out infinite;
+}
+
+.reader.invite .glowCore {
+  background: radial-gradient(circle, rgba(255, 210, 130, 0.78), rgba(235, 170, 85, 0.42) 30%, rgba(200, 130, 50, 0.16) 54%, transparent 72%);
 }
 
 .invitePulse {
-  animation: coreBreath 7s ease-in-out infinite, emberShift 12s ease-in-out infinite !important;
+  animation: inviteCoreBreath 5.5s ease-in-out infinite, emberShift 10s ease-in-out infinite !important;
+}
+
+@keyframes inviteCoreBreath {
+  0%, 100% { opacity: 0.58; transform: translate(-50%, -50%) scale(0.86); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.16); }
 }
 
 .subtitle.inviteText {
@@ -1438,19 +1448,21 @@ button {
   position: fixed;
   left: 50%;
   top: 58%;
-  width: 8px;
-  height: 8px;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
   transform: translateX(-50%);
-  background: rgba(255, 220, 170, 0.55);
-  box-shadow: 0 0 24px rgba(255, 200, 140, 0.35);
-  animation: breathDot 3.2s ease-in-out infinite;
+  background: rgba(255, 220, 170, 0.88);
+  box-shadow:
+    0 0 28px rgba(255, 200, 130, 0.75),
+    0 0 56px rgba(255, 170, 80, 0.35);
+  animation: breathDot 2.8s ease-in-out infinite;
   pointer-events: none;
 }
 
 @keyframes breathDot {
-  0%, 100% { opacity: 0.25; transform: translateX(-50%) scale(0.85); }
-  50% { opacity: 0.95; transform: translateX(-50%) scale(1.15); }
+  0%, 100% { opacity: 0.4; transform: translateX(-50%) scale(0.78); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.28); }
 }
 
 /* —— 三步认识用户 —— */
@@ -1510,7 +1522,7 @@ button {
 
 .siteBreath .outerHalo,
 .siteBreath .glowCore {
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .siteNav,
@@ -1799,16 +1811,31 @@ html[data-theme="day"] body {
 
 html[data-theme="day"] .reader {
   background:
-    radial-gradient(circle at 50% 46%, rgba(220, 180, 120, 0.2), transparent 48%),
+    radial-gradient(circle at 50% 46%, rgba(220, 180, 120, 0.32), transparent 50%),
     #f6f1e8;
 }
 
 html[data-theme="day"] .outerHalo {
-  background: radial-gradient(circle, rgba(210, 160, 90, 0.14), rgba(180, 130, 70, 0.04) 56%, transparent 72%);
+  background: radial-gradient(circle, rgba(220, 170, 100, 0.24), rgba(190, 140, 80, 0.08) 54%, transparent 70%);
 }
 
 html[data-theme="day"] .glowCore {
-  background: radial-gradient(circle, rgba(230, 180, 100, 0.38), rgba(210, 150, 70, 0.16) 34%, rgba(190, 130, 60, 0.06) 58%, transparent 75%);
+  background: radial-gradient(circle, rgba(240, 190, 110, 0.55), rgba(220, 165, 85, 0.26) 32%, rgba(200, 145, 70, 0.1) 56%, transparent 74%);
+}
+
+html[data-theme="day"] .reader.invite .outerHalo {
+  background: radial-gradient(circle, rgba(230, 180, 100, 0.32), rgba(200, 150, 80, 0.12) 50%, transparent 68%);
+}
+
+html[data-theme="day"] .reader.invite .glowCore {
+  background: radial-gradient(circle, rgba(255, 210, 130, 0.72), rgba(235, 175, 95, 0.38) 30%, rgba(210, 150, 75, 0.14) 54%, transparent 72%);
+}
+
+html[data-theme="day"] .breathCue {
+  background: rgba(210, 150, 70, 0.92);
+  box-shadow:
+    0 0 24px rgba(200, 140, 60, 0.55),
+    0 0 48px rgba(180, 120, 50, 0.28);
 }
 
 html[data-theme="day"] .thinking .glowCore {
@@ -2029,11 +2056,6 @@ html[data-theme="day"] .memoryTimeline {
 
 html[data-theme="day"] .traceItem {
   border-left-color: rgba(120, 90, 60, 0.2);
-}
-
-html[data-theme="day"] .breathCue {
-  background: rgba(180, 130, 70, 0.62);
-  box-shadow: 0 0 18px rgba(200, 150, 80, 0.22);
 }
 
 html[data-theme="day"] .site {
