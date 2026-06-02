@@ -1144,8 +1144,6 @@ export default function Home() {
         )}
       </div>
 
-      {!book && !isThinking && <div className="breathCue" aria-hidden="true" />}
-
       <section
         className={`inputDock ${inputOpen ? "open" : ""} ${!inputOpen ? "closed" : ""}`}
         onClick={() => {

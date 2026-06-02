@@ -1371,10 +1371,6 @@ button {
     display: none;
   }
 
-  .breathCue {
-    top: 52%;
-  }
-
   .bootBrand {
     margin-bottom: 36px;
     font-size: 28px;
@@ -1442,27 +1438,6 @@ button {
 @keyframes inviteFade {
   0%, 100% { opacity: 0.72; }
   50% { opacity: 1; }
-}
-
-.breathCue {
-  position: fixed;
-  left: 50%;
-  top: 58%;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  transform: translateX(-50%);
-  background: rgba(255, 220, 170, 0.88);
-  box-shadow:
-    0 0 28px rgba(255, 200, 130, 0.75),
-    0 0 56px rgba(255, 170, 80, 0.35);
-  animation: breathDot 2.8s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes breathDot {
-  0%, 100% { opacity: 0.4; transform: translateX(-50%) scale(0.78); }
-  50% { opacity: 1; transform: translateX(-50%) scale(1.28); }
 }
 
 /* —— 三步认识用户 —— */
@@ -1829,13 +1804,6 @@ html[data-theme="day"] .reader.invite .outerHalo {
 
 html[data-theme="day"] .reader.invite .glowCore {
   background: radial-gradient(circle, rgba(255, 210, 130, 0.72), rgba(235, 175, 95, 0.38) 30%, rgba(210, 150, 75, 0.14) 54%, transparent 72%);
-}
-
-html[data-theme="day"] .breathCue {
-  background: rgba(210, 150, 70, 0.92);
-  box-shadow:
-    0 0 24px rgba(200, 140, 60, 0.55),
-    0 0 48px rgba(180, 120, 50, 0.28);
 }
 
 html[data-theme="day"] .thinking .glowCore {
